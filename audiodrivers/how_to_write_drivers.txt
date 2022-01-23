@@ -1,0 +1,24 @@
+---- How to write your own audio driver for it2play ----
+
+1) Include the header "../../it_music.h"
+
+2) Implement the following functions using your audio API of choice:
+
+  void lockMixer(void); // waits for the current mixing block to finish and disables further mixing
+  void unlockMixer(void); // enables mixing again
+  bool openMixer(int32_t mixingFrequency, int32_t mixingBufferSize); // 16000..64000, 256..8192 (true if ok, false if fail)
+  void closeMixer(void);
+
+3) When the audio API is requesting samples, make a call to mix_UpdateBuffer(), f.ex.:
+
+   Music_FillAudioBuffer((int16_t *)stream, len / 4);
+  
+4) Make your own preprocessor define (f.ex. AUDIODRIVER_ALSA) and pass it to the compiler during compilation
+   (also remember to add the correct driver .c file to the compilation script)
+
+5) In "pmplay.h", insert your preprocessor define and include in the "AUDIO DRIVERS" #ifdef chain and
+   include your audio driver header in there.
+
+-------------------------------------------------------
+
+You can look at audiodrivers/sdl/sdldriver.c if you need some references...

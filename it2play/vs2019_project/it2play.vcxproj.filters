@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="audiodrivers">
+      <UniqueIdentifier>{2c874cd2-a32c-4a32-80eb-a2c947fb1a85}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="audiodrivers\winmm">
+      <UniqueIdentifier>{66a9a674-2f26-47ef-955c-ef354abaa597}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="it2play">
+      <UniqueIdentifier>{58161d52-ad52-47b7-aaee-131e5a3a148d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="it2drivers">
+      <UniqueIdentifier>{2f625b78-ff14-4068-aa78-ed3f3a68ec20}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mmcmp">
+      <UniqueIdentifier>{e13bf950-3464-42fc-9932-06f09c42f4c5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\audiodrivers\winmm\winmm.c">
+      <Filter>audiodrivers\winmm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\it2play.c">
+      <Filter>it2play</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\it_d_rm.c" />
+    <ClCompile Include="..\..\it_m_eff.c" />
+    <ClCompile Include="..\..\it_music.c" />
+    <ClCompile Include="..\..\it_tables.c" />
+    <ClCompile Include="..\..\it2drivers\sb16mmx.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\it2drivers\sb16.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\it2drivers\sb16_m.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\it2drivers\zerovol.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\it2drivers\sb16mmx_m.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\it2drivers\wavwriter.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\it2drivers\wavwriter_m.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\posix.c">
+      <Filter>it2play</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\mmcmp\mmcmp_unpack.c">
+      <Filter>mmcmp</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\audiodrivers\winmm\winmm.h">
+      <Filter>audiodrivers\winmm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it_d_rm.h" />
+    <ClInclude Include="..\..\it_m_eff.h" />
+    <ClInclude Include="..\..\it_music.h" />
+    <ClInclude Include="..\..\it_structs.h" />
+    <ClInclude Include="..\..\it_tables.h" />
+    <ClInclude Include="..\..\it2drivers\sb16mmx.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\sb16.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\sb16_m.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\zerovol.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\sb16mmx_m.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\wavwriter.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\wavwriter_m.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\posix.h">
+      <Filter>it2play</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\mmcmp\mmcmp_unpack.h">
+      <Filter>mmcmp</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
