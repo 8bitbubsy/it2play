@@ -1,0 +1,9 @@
+
+*.log
+*.obj
+*.iobj
+*.recipe
+*.db
+it2play/vs2019_project/.vs/it2play/v16/.suo
+*.tlog
+it2play/vs2019_project/x64/Release/it2play.vcxproj.FileListAbsolute.txt
