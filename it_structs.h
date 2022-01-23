@@ -241,5 +241,5 @@ struct
 	uint16_t DecodeExpectedPattern, DecodeExpectedRow;
 } Song;
 
-hostChn_t hChn[MAX_HOST_CHANNELS];
-slaveChn_t sChn[MAX_SLAVE_CHANNELS];
+extern hostChn_t hChn[MAX_HOST_CHANNELS];
+extern slaveChn_t sChn[MAX_SLAVE_CHANNELS];

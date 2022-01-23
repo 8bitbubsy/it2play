@@ -30,6 +30,7 @@
     <ClCompile Include="..\..\it_d_rm.c" />
     <ClCompile Include="..\..\it_music.c" />
     <ClCompile Include="..\..\it_m_eff.c" />
+    <ClCompile Include="..\..\it_structs.c" />
     <ClCompile Include="..\..\it_tables.c" />
     <ClCompile Include="..\..\mmcmp\mmcmp_unpack.c" />
     <ClCompile Include="..\src\it2play.c" />

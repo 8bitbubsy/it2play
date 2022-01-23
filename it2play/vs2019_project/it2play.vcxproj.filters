@@ -55,6 +55,7 @@
     <ClCompile Include="..\..\mmcmp\mmcmp_unpack.c">
       <Filter>mmcmp</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\it_structs.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\audiodrivers\winmm\winmm.h">
