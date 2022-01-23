@@ -65,7 +65,7 @@
 	sc->CurrVolR += (sc->DestVolR - sc->CurrVolR) >> (RAMPSPEED-1);
 
 #define UpdatePos \
-	sc->SmpError += Delta; \
+	sc->SmpError += Driver.Delta; \
 	smp += (int32_t)sc->SmpError >> MIX_FRAC_BITS; \
 	sc->SmpError &= MIX_FRAC_MASK;
 
@@ -184,8 +184,6 @@ const mixFunc SB16MMX_MixFunctionTables[8] =
 	(mixFunc)M32Bit8MF,
 	(mixFunc)M32Bit16MF
 };
-
-int32_t Delta; // 8bb: globalized
 
 void M32Bit8M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {

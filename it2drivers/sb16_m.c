@@ -43,7 +43,7 @@
 	sample += sample2;
 
 #define UpdatePos \
-	sc->SmpError += Delta; \
+	sc->SmpError += Driver.Delta; \
 	smp += (int32_t)sc->SmpError >> MIX_FRAC_BITS; \
 	sc->SmpError &= MIX_FRAC_MASK;
 
@@ -173,7 +173,6 @@ const mixFunc SB16_MixFunctionTables[16] =
 
 // 8bb: globalized
 int16_t MixSegment[MIXTABLESIZE]; // 8bb: volume LUT for 16-bit mix mode
-int32_t Delta;
 uint32_t LeftVolume16, RightVolume16;
 // ------------------
 

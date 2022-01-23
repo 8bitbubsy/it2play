@@ -4,3 +4,5 @@
 
 hostChn_t hChn[MAX_HOST_CHANNELS];
 slaveChn_t sChn[MAX_SLAVE_CHANNELS];
+driver_t Driver;
+song_t Song;

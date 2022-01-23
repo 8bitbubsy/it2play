@@ -85,15 +85,6 @@ enum // 8bb: audio driver flags
 	DF_HAS_RESONANCE_FILTER = 8 // 8bb: added this
 };
 
-struct driver_t
-{
-	bool StartNoRamp; // 8bb: for "WAV writer" driver
-	uint8_t Type, Flags, FilterParameters[128];
-	int32_t BytesToMix;
-	uint32_t MixMode, MixSpeed;
-	float *fQualityFactorTable, *fFilterCoeffTable;
-} Driver;
-
 // 8bb: do NOT change these, it will only mess things up!
 #define MAX_PATTERNS 200
 #define MAX_SAMPLES 100
@@ -221,7 +212,16 @@ typedef struct it_header_t
 	uint8_t ChnlPan[MAX_HOST_CHANNELS], ChnlVol[MAX_HOST_CHANNELS];
 } it_header_t;
 
-struct
+typedef struct
+{
+	bool StartNoRamp; // 8bb: for "WAV writer" driver
+	uint8_t Type, Flags, FilterParameters[128];
+	int32_t BytesToMix, Delta;
+	uint32_t MixMode, MixSpeed;
+	float *fQualityFactorTable, *fFilterCoeffTable;
+} driver_t;
+
+typedef struct song_t
 {
 	it_header_t Header;
 	uint8_t Orders[MAX_ORDERS];
@@ -239,7 +239,9 @@ struct
 	uint16_t NumberOfRows, CurrentTick, CurrentSpeed, ProcessTick;
 	uint16_t Tempo, GlobalVolume;
 	uint16_t DecodeExpectedPattern, DecodeExpectedRow;
-} Song;
+} song_t;
 
 extern hostChn_t hChn[MAX_HOST_CHANNELS];
 extern slaveChn_t sChn[MAX_SLAVE_CHANNELS];
+extern song_t Song;
+extern driver_t Driver;

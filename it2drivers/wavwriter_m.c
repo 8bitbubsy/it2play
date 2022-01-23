@@ -68,7 +68,7 @@
 	sc->CurrVolR += (sc->DestVolR - sc->CurrVolR) >> RAMPSPEED;
 
 #define UpdatePos \
-	sc->SmpError += Delta; \
+	sc->SmpError += Driver.Delta; \
 	smp += (int32_t)sc->SmpError >> MIX_FRAC_BITS; \
 	sc->SmpError &= MIX_FRAC_MASK;
 
@@ -106,7 +106,7 @@ const mixFunc WAVWriter_MixFunctionTables[4] =
 	(mixFunc)Mix32Surround16Bit
 };
 
-int32_t Delta, LastLeftValue, LastRightValue; // 8bb: globalized
+int32_t LastLeftValue, LastRightValue; // 8bb: globalized
 
 // 8bb: these two routines seem to be Cubic Lagrange (?)
 

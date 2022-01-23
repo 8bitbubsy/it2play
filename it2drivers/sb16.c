@@ -180,7 +180,7 @@ void SB16_MixSamples(void)
 							SamplesToMix = UINT16_MAX;
 
 						SamplesToMix = (((SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->SmpError) / sc->Delta) + 1;
-						Delta = 0 - sc->Delta;
+						Driver.Delta = 0 - sc->Delta;
 					}
 					else // 8bb: forwards
 					{
@@ -189,7 +189,7 @@ void SB16_MixSamples(void)
 							SamplesToMix = UINT16_MAX;
 
 						SamplesToMix = (((SamplesToMix << MIX_FRAC_BITS) | ((uint16_t)sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
-						Delta = sc->Delta;
+						Driver.Delta = sc->Delta;
 					}
 
 					if (SamplesToMix > MixBlockSize)
@@ -216,7 +216,7 @@ void SB16_MixSamples(void)
 					if (SamplesToMix > MixBlockSize)
 						SamplesToMix = MixBlockSize;
 
-					Delta = sc->Delta;
+					Driver.Delta = sc->Delta;
 					Mix(sc, MixBufferPtr, SamplesToMix);
 					MixBufferPtr += SamplesToMix << 1;
 
@@ -244,7 +244,7 @@ void SB16_MixSamples(void)
 					if (SamplesToMix > MixBlockSize)
 						SamplesToMix = MixBlockSize;
 
-					Delta = sc->Delta;
+					Driver.Delta = sc->Delta;
 					Mix(sc, MixBufferPtr, SamplesToMix);
 					MixBufferPtr += SamplesToMix << 1;
 

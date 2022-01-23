@@ -9,8 +9,6 @@
 
 typedef void (*mixFunc)(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 
-extern int32_t Delta;
-
 extern const mixFunc SB16MMX_MixFunctionTables[8];
 
 void M32Bit8M(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);

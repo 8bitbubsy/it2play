@@ -8,7 +8,7 @@
 
 typedef void (*mixFunc)(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 
-extern int32_t Delta, LastLeftValue, LastRightValue;
+extern int32_t LastLeftValue, LastRightValue;
 
 extern const mixFunc WAVWriter_MixFunctionTables[4];
 
