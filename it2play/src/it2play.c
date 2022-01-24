@@ -36,20 +36,6 @@ static void handleArguments(int argc, char *argv[]);
 static void readKeyboard(void);
 static int32_t renderToWav(void);
 
-double timingFunction()
-{
-#ifdef _WIN32
-	LARGE_INTEGER performanceFrequency, performanceCounter;
-	QueryPerformanceFrequency(&performanceFrequency);
-	QueryPerformanceCounter(&performanceCounter);
-	return ((double)performanceCounter.QuadPart) / ((double)performanceFrequency.QuadPart);
-#else
-	struct timespec t;
-	clock_gettime(CLOCK_MONOTONIC, &t);
-	return t.tv_sec + ((double)t.tv_nsec) / 1000000000.0;
-#endif
-}
-
 // yuck!
 #ifdef _WIN32
 void wavRecordingThread(void *arg)
@@ -153,10 +139,6 @@ int main(int argc, char *argv[])
 	modifyTerminal();
 #endif
 
-	Music_RegisterTimingFunction(timingFunction);
-
-	double cpuMax = 0.0;
-
 	programRunning = true;
 	while (programRunning)
 	{
@@ -171,18 +153,11 @@ int main(int argc, char *argv[])
 		if (order < 0) // this can happen for a split second when you decrease the position :)
 			order = 0;
 
-		double timeSpent, timeIdle;
-		Music_GetTiming(&timeSpent, &timeIdle);
-
-		double cpuUsage = ((timeSpent + timeIdle) > 0) ? timeSpent * 100.0 / (timeSpent + timeIdle) : 0.0;
-		if (cpuUsage > cpuMax) cpuMax = cpuUsage;
-
-		printf("Row: %03d/%03d - Pos: %03d - BPM: %3d - Speed: %3d - Channels: %3d (%d) - CPU: %.2f%% (%.2f%%)      \r",
+		printf("Row: %03d/%03d - Pos: %03d - BPM: %3d - Speed: %3d - Channels: %3d (%d)      \r",
 			Song.CurrentRow, Song.NumberOfRows,
 			order,
 			Song.Tempo, Song.CurrentSpeed,
-			activeVoices, highestVoiceCount,
-			cpuUsage, cpuMax);
+			activeVoices, highestVoiceCount);
 		fflush(stdout);
 
 		Sleep(50);
