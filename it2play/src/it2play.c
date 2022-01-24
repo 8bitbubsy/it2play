@@ -155,6 +155,8 @@ int main(int argc, char *argv[])
 
 	Music_RegisterTimingFunction(timingFunction);
 
+	double cpuMax = 0.0;
+
 	programRunning = true;
 	while (programRunning)
 	{
@@ -172,12 +174,15 @@ int main(int argc, char *argv[])
 		double timeSpent, timeIdle;
 		Music_GetTiming(&timeSpent, &timeIdle);
 
-		printf("Row: %03d/%03d - Pos: %03d - BPM: %3d - Speed: %3d - Channels: %3d (%d) - CPU: %.2f%%      \r",
+		double cpuUsage = ((timeSpent + timeIdle) > 0) ? timeSpent * 100.0 / (timeSpent + timeIdle) : 0.0;
+		if (cpuUsage > cpuMax) cpuMax = cpuUsage;
+
+		printf("Row: %03d/%03d - Pos: %03d - BPM: %3d - Speed: %3d - Channels: %3d (%d) - CPU: %.2f%% (%.2f%%)      \r",
 			Song.CurrentRow, Song.NumberOfRows,
 			order,
 			Song.Tempo, Song.CurrentSpeed,
 			activeVoices, highestVoiceCount,
-			((timeSpent + timeIdle) > 0) ? timeSpent * 100.0 / (timeSpent + timeIdle) : 0.0);
+			cpuUsage, cpuMax);
 		fflush(stdout);
 
 		Sleep(50);
