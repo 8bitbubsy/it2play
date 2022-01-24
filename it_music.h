@@ -81,4 +81,8 @@ void Music_ReleaseAllPatterns(void);
 int32_t Music_GetActiveVoices(void); // 8bb: added this
 bool Music_RenderToWAV(const char *filenameOut); // 8bb: added this
 
+typedef double (*Music_TimingFunction)(void);
+void Music_RegisterTimingFunction(Music_TimingFunction func);
+void Music_GetTiming(double * TimeSpent, double * TimeIdle);
+
 extern bool WAVRender_Flag; // 8bb: added this
