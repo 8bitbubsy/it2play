@@ -24,6 +24,8 @@ static HWAVEOUT hWave;
 
 static DWORD WINAPI mixThread(LPVOID lpParam)
 {
+	(void)lpParam;
+	
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 	while (mixerOpened)
 	{
@@ -42,8 +44,6 @@ static DWORD WINAPI mixThread(LPVOID lpParam)
 	}
 
 	return 0;
-
-	(void)lpParam;
 }
 
 static void CALLBACK waveProc(HWAVEOUT hWaveOut, UINT uMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2)
