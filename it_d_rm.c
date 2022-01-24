@@ -713,7 +713,6 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 
 	if (!LoadHeader(m)) goto Error;
 
-	
 	int32_t OrdersToLoad = Song.Header.OrdNum - 1; // 8bb: IT2 does this (removes the count for the last 255 terminator)
 	if (OrdersToLoad > 0)
 	{
@@ -728,7 +727,6 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 	{
 		memset(Song.Orders, 255, MAX_ORDERS);
 	}
-
 
 	if (!LoadInstruments(m)) goto Error;
 	if (!LoadSampleHeaders(m)) goto Error;
