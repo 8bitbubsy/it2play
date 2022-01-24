@@ -13,3 +13,6 @@ it2play/vs2019_project/x64/Release/it2play.vcxproj.FileListAbsolute.txt
 *.ipch
 it2play/vs2019_project/debug.it
 it2play/vs2019_project/x64/Debug/it2play.vcxproj.FileListAbsolute.txt
+it2play/vs2019_project/x64/Debug/it2play.exe
+*.ilk
+*.pdb
