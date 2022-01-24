@@ -642,10 +642,12 @@ static bool LoadHeader(MEMFILE *m)
 	if (!ReadBytes(m, Song.Header.ChnlPan, MAX_HOST_CHANNELS)) return false;
 	if (!ReadBytes(m, Song.Header.ChnlVol, MAX_HOST_CHANNELS)) return false;
 
-	if (Song.Header.OrdNum > MAX_ORDERS) return false;
-	if (Song.Header.InsNum > MAX_INSTRUMENTS) return false;
-	if (Song.Header.SmpNum > MAX_SAMPLES) return false;
-	if (Song.Header.PatNum > MAX_PATTERNS) return false;
+	// 8bb: IT2 doesn't do this test, but I do it for safety.
+	if (Song.Header.OrdNum > MAX_ORDERS+1 || Song.Header.InsNum > MAX_INSTRUMENTS ||
+		Song.Header.SmpNum > MAX_SAMPLES  || Song.Header.PatNum > MAX_PATTERNS)
+	{
+		return false;
+	}
 
 	// 8bb: IT2 doesn't do this, but let's do it for safety
 	if (Song.Header.MessageLength > MAX_SONGMSG_LENGTH)
@@ -702,8 +704,6 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 	if (firstTimeLoading)
 	{
 		memset(&Song, 0, sizeof (Song));
-		memset(Song.Orders, 255, MAX_ORDERS);
-
 		firstTimeLoading = false;
 	}
 	else
@@ -712,7 +712,17 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 	}
 
 	if (!LoadHeader(m)) goto Error;
-	if (!ReadBytes(m, Song.Orders, Song.Header.OrdNum)) goto Error;
+
+	// 8bb: IT2 does this (removes the count for the last 255 terminator)
+	int32_t OrdersToLoad = Song.Header.OrdNum - 1;
+
+	if (!ReadBytes(m, Song.Orders, OrdersToLoad))
+		goto Error;
+
+	// 8bb: fill rest of order list with 255
+	if (OrdersToLoad < MAX_ORDERS)
+		memset(&Song.Orders[OrdersToLoad], 255, MAX_ORDERS-OrdersToLoad);
+
 	if (!LoadInstruments(m)) goto Error;
 	if (!LoadSampleHeaders(m)) goto Error;
 	if (!LoadSampleDatas(m)) goto Error;
