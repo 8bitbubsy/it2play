@@ -125,6 +125,7 @@ int main(int argc, char *argv[])
 	printf(" Esc=Quit   Plus = inc. song pos   Minus = dec. song pos\n");
 	printf("\n");
 	printf("Name: %s\n", Song.Header.SongName);
+	printf("Orders in song: %d\n", (Song.Header.OrdNum <= 1) ? 0 : (Song.Header.OrdNum-1));
 	printf("Stereo mode: %s\n", (Song.Header.Flags & ITF_STEREO) ? "Yes" : "No");
 	printf("Mixing volume: %d/128\n", Song.Header.MixVolume);
 	printf("Mixing frequency: %dHz\n", mixingFrequency);
@@ -144,20 +145,33 @@ int main(int argc, char *argv[])
 	{
 		readKeyboard();
 
-		static int32_t highestVoiceCount = 0;
-		int32_t activeVoices = Music_GetActiveVoices();
-		if (activeVoices > highestVoiceCount)
-			highestVoiceCount = activeVoices;
+		// find current "end of order"
 
-		int16_t order = Song.CurrentOrder;
-		if (order < 0) // this can happen for a split second when you decrease the position :)
-			order = 0;
+		int16_t currOrder = Song.CurrentOrder;
+		if (currOrder < 0) // this can happen for a split second when you decrease the position :)
+			currOrder = 0;
 
-		printf("Pos: %03d - Row: %03d/%03d - BPM: %3d - Speed: %3d - Voices: %3d (%d)      \r",
-			order,
+		int16_t orderEnd = Song.Header.OrdNum;
+		if (orderEnd > 0)
+		{
+			for (int16_t i = Song.CurrentOrder; i < orderEnd; i++)
+			{
+				if (Song.Orders[i] == 255)
+				{
+					orderEnd = i;
+					break;
+				}
+			}
+
+			if (orderEnd > 0)
+				orderEnd--;
+		}
+
+		printf("Playing, Order: %d/%d, Pattern: %d, Row: %d/%d, %d Channels      \r",
+			currOrder, orderEnd,
+			Song.CurrentPattern,
 			Song.CurrentRow, Song.NumberOfRows,
-			Song.Tempo, Song.CurrentSpeed,
-			activeVoices, highestVoiceCount);
+			Music_GetActiveVoices());
 		fflush(stdout);
 
 		Sleep(50);
