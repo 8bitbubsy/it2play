@@ -153,9 +153,9 @@ int main(int argc, char *argv[])
 		if (order < 0) // this can happen for a split second when you decrease the position :)
 			order = 0;
 
-		printf("Row: %03d/%03d - Pos: %03d - BPM: %3d - Speed: %3d - Channels: %3d (%d)      \r",
-			Song.CurrentRow, Song.NumberOfRows,
+		printf("Pos: %03d - Row: %03d/%03d - BPM: %3d - Speed: %3d - Voices: %3d (%d)      \r",
 			order,
+			Song.CurrentRow, Song.NumberOfRows,
 			Song.Tempo, Song.CurrentSpeed,
 			activeVoices, highestVoiceCount);
 		fflush(stdout);
