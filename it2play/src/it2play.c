@@ -145,24 +145,23 @@ int main(int argc, char *argv[])
 	{
 		readKeyboard();
 
-		// find current "end of order"
-
 		int16_t currOrder = Song.CurrentOrder;
 		if (currOrder < 0) // this can happen for a split second when you decrease the position :)
 			currOrder = 0;
 
-		int16_t orderEnd = Song.Header.OrdNum;
+		// find current "end of order"
+
+		int16_t orderEnd = Song.Header.OrdNum - 1;
 		if (orderEnd > 0)
 		{
-			for (int16_t i = Song.CurrentOrder; i < orderEnd; i++)
+			int16_t i = currOrder;
+			for (; i < orderEnd; i++)
 			{
 				if (Song.Orders[i] == 255)
-				{
-					orderEnd = i;
 					break;
-				}
 			}
 
+			orderEnd = i;
 			if (orderEnd > 0)
 				orderEnd--;
 		}
@@ -174,7 +173,7 @@ int main(int argc, char *argv[])
 			Music_GetActiveVoices());
 		fflush(stdout);
 
-		Sleep(50);
+		Sleep(25);
 	}
 
 #ifndef _WIN32
