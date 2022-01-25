@@ -27,6 +27,7 @@ bool createSingleThread(void *(*threadFunc)(void *arg));
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
 
 void Sleep(uint32_t ms);
 void modifyTerminal(void);

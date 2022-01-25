@@ -42,6 +42,14 @@ static double *dLinearSlideUpTable, *dLinearSlideDownTable;
 #endif
 static char MIDIDataArea[(9+16+128)*32];
 
+static Music_TimingFunction TimingFunction = NULL;
+static double TimingStart = -1.0;
+static double TimingEnd = -1.0;
+static double TimingLastMonotonic = -1.0;
+static double TimingMonotonic = -1.0;
+static double TimeSpent = 0.0;
+static double TimeIdle = 0.0;
+
 /* 8bb: These have been changed to be easier to understand,
 ** and to be 32-bit/64-bit pointer compliant.
 */
@@ -1893,8 +1901,34 @@ void Music_FillAudioBuffer(int16_t *buffer, int32_t numSamples)
 		return;
 	}
 
+	if (TimingFunction)
+	{
+		TimingLastMonotonic = TimingMonotonic;
+		TimingStart = TimingFunction(0);
+		TimingMonotonic = TimingFunction(1);
+	}
+
 	if (DriverMix != NULL)
 		DriverMix(numSamples, buffer);
+
+	if (TimingFunction)
+	{
+		TimingEnd = TimingFunction(0);
+		TimeSpent += TimingEnd - TimingStart;
+		if (TimingLastMonotonic >= 0)
+			TimeIdle += TimingMonotonic - TimingLastMonotonic;
+	}
+}
+
+void Music_GetTiming(double * _TimeSpent, double * _TimeIdle)
+{
+	if (_TimeSpent) *_TimeSpent = TimeSpent, TimeSpent = 0;
+	if (_TimeIdle) *_TimeIdle = TimeIdle, TimeIdle = 0;
+}
+
+void Music_RegisterTimingFunction(Music_TimingFunction func)
+{
+	TimingFunction = func;
 }
 
 bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t DriverType)

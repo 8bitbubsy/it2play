@@ -36,6 +36,48 @@ static void handleArguments(int argc, char *argv[]);
 static void readKeyboard(void);
 static int32_t renderToWav(void);
 
+double timingFunction(int isRealTime)
+{
+#ifdef _WIN32
+	if (isRealTime)
+	{
+		LARGE_INTEGER performanceFrequency, performanceCounter;
+		QueryPerformanceFrequency(&performanceFrequency);
+		QueryPerformanceCounter(&performanceCounter);
+		return ((double)performanceCounter.QuadPart) / ((double)performanceFrequency.QuadPart);
+	}
+	else
+	{
+		FILETIME creationTime, exitTime, kernelTime, userTime;
+		ULARGE_INTEGER time;
+		GetProcessTimes(GetCurrentProcess(), &creationTime, &exitTime, &kernelTime, &userTime);
+		time.LowPart = userTime.dwLowDateTime;
+		time.HighPart = userTime.dwHighDateTime;
+		return ((double)time.QuadPart) / 10000000.0;
+	}
+#elif defined(__MACH__)
+	if (isRealTime)
+	{
+		struct timespec t;
+		clock_gettime(CLOCK_MONOTONIC, &t);
+		return t.tv_sec + ((double)t.tv_nsec) / 1000000000.0;
+	}
+	else
+	{
+		struct rusage r_usage;
+		getrusage(RUSAGE_SELF, &r_usage);
+		return r_usage.ru_utime.tv_sec + ((double)r_usage.ru_utime.tv_usec) / 1000000.0;
+	}
+#else
+	clockid_t cid = CLOCK_MONOTONIC;
+	struct timespec t;
+	if (!isRealTime)
+		pthread_getcpuclockid(pthread_self(), &cid);
+	clock_gettime(cid, &t);
+	return t.tv_sec + ((double)t.tv_nsec) / 1000000000.0;
+#endif
+}
+
 // yuck!
 #ifdef _WIN32
 void wavRecordingThread(void *arg)
@@ -140,7 +182,10 @@ int main(int argc, char *argv[])
 	modifyTerminal();
 #endif
 
+	Music_RegisterTimingFunction(timingFunction);
+
 	programRunning = true;
+	double threadMax = 0.0;
 	while (programRunning)
 	{
 		readKeyboard();
@@ -166,11 +211,19 @@ int main(int argc, char *argv[])
 				orderEnd--;
 		}
 
-		printf("Playing, Order: %d/%d, Pattern: %d, Row: %d/%d, %d Channels      \r",
+		double timeSpent, timeIdle;
+		Music_GetTiming(&timeSpent, &timeIdle);
+
+		double threadUsage = (timeIdle > 0) ? timeSpent * 100.0 / (timeIdle) : 0.0;
+		if (threadUsage > 99.0) threadUsage = 0.0;
+		if (threadUsage > threadMax) threadMax = threadUsage;
+
+		printf("\rPlaying, Order: %d/%d, Pattern: %d, Row: %d/%d, %d Channels, Thread: %.2f%% (%.2f%%)       ",
 			currOrder, orderEnd,
 			Song.CurrentPattern,
 			Song.CurrentRow, Song.NumberOfRows,
-			Music_GetActiveVoices());
+			Music_GetActiveVoices(),
+			threadUsage, threadMax);
 		fflush(stdout);
 
 		Sleep(25);
