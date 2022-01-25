@@ -684,11 +684,11 @@ void Music_FreeSong(void)
 bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 {
 	bool WasCompressed = false;
-
-	if (DataLen > 8+2) // 8bb: find out if module is MMC compressed
+	if (DataLen > 4+4) // 8bb: find out if module is MMCMP compressed
 	{
-		uint16_t HdrSize = *(uint16_t *)&Data[8];
-		if (!memcmp(Data, "ziRCONia", 8) && HdrSize > 0)
+		uint32_t Sig1 = *(uint32_t *)&Data[0];
+		uint32_t Sig2 = *(uint32_t *)&Data[4];
+		if (Sig1 == 0x4352697A && Sig2 == 0x61694E4F) // 8bb: Sig1 = "ziRCONia"
 		{
 			if (unpackMMCMP(&Data, &DataLen))
 				WasCompressed = true;
