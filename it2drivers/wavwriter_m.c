@@ -23,12 +23,7 @@
 	sc->fOldSamples[1] = sc->fOldSamples[0]; \
 	sc->fOldSamples[0] = fSample; \
 	\
-	if (fSample < 0.0f) \
-		fSample -= 0.5f; \
-	else if (fSample > 0.0f) \
-		fSample += 0.5f; \
-	\
-	sample = FastCompressAndQuantizeSample(fSample);
+	sample = ApplyCompressorAndQuantize(fSample);
 
 #define Get16BitWaveForm \
 	fSample = IT2_Cubic16(base, smp, sc->SmpError); \
@@ -43,12 +38,7 @@
 	sc->fOldSamples[1] = sc->fOldSamples[0]; \
 	sc->fOldSamples[0] = fSample; \
 	\
-	if (fSample < 0.0f) \
-		fSample -= 0.5f; \
-	else if (fSample > 0.0f) \
-		fSample += 0.5f; \
-	\
-	sample = FastCompressAndQuantizeSample(fSample);
+	sample = ApplyCompressorAndQuantize(fSample);
 
 #define MixSample \
 	LastLeftValue  = sample * sc->CurrVolL; \
@@ -114,18 +104,31 @@ int32_t LastLeftValue, LastRightValue; // 8bb: globalized
 static const float Const256On6 = 42.6666641f;
 static const float Const1On6 = 0.166666657f;
 
-static inline int32_t FastCompressAndQuantizeSample(float fSample)
+static inline int32_t ApplyCompressorAndQuantize(float fSample)
 {
-	int32_t InputSample = (int32_t)fSample;
-	const int32_t XORMask = InputSample >> 31;
+	int32_t SampleValue;
 
-	InputSample ^= XORMask;
-	InputSample -= XORMask;
+	if (fSample < -32768.0f || fSample > 32768.0f)
+	{
+		uint32_t XORMask = 0;
+		if (fSample < 0.0f)
+		{
+			fSample = -fSample;
+			XORMask = 0xFFFFFFFF;
+		}
 
-	if (InputSample > MAX_SAMPLE_VALUE) // 8bb: fast branchless operation
-		InputSample = MAX_SAMPLE_VALUE;
+#define LN_32768 22713.0 /* 8bb: 22713 = round[ln(2) * 32768] */
 
-	return (Driver.CompressorLUT[InputSample] ^ XORMask) - XORMask;
+		SampleValue = (int32_t)((log2(fSample * (1.0 / 32768.0)) * LN_32768) + (32768.0 + 0.5));
+		SampleValue ^= XORMask;
+		SampleValue -= XORMask;
+	}
+	else
+	{
+		SampleValue = (int32_t)roundf(fSample);
+	}
+
+	return SampleValue;
 }
 
 // 8bb: these two routines seem to be Cubic Lagrange (?)

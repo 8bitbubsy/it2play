@@ -219,7 +219,6 @@ typedef struct
 	int32_t BytesToMix, Delta;
 	uint32_t MixMode, MixSpeed;
 	float *fQualityFactorTable, *fFilterCoeffTable;
-	int32_t *CompressorLUT;
 } driver_t;
 
 typedef struct song_t

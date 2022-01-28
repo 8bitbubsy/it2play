@@ -568,38 +568,6 @@ void WAVWriter_FixSamples(void)
 	}
 }
 
-/*
-** 8bb:
-** Added this LUT pre-calc for doing IT2.15's filter compression, as we
-** don't want to use log2() in a live mixer. It uses around 921kB of memory.
-**
-** It also yields some +/- 1 errors, but accuracy is quite ok.
-*/
-static bool CalculateCompressorLUT(void)
-{
-	Driver.CompressorLUT = (int32_t *)malloc((MAX_SAMPLE_VALUE+1) * sizeof (int32_t));
-	if (Driver.CompressorLUT == NULL)
-		return false;
-
-#define COMPRESSOR_THRESHOLD 32768 /* 8bb: IT2.15 only applies the compressor if we reach this value */
-#define LN2_32768 22713.0 /* 8bb: round[ln(2) * 32768] */
-
-	for (int32_t i = 0; i <= MAX_SAMPLE_VALUE; i++)
-	{
-		if (i < COMPRESSOR_THRESHOLD)
-		{
-			Driver.CompressorLUT[i] = i;
-		}
-		else
-		{
-			// 8bb: the +0.5 is for rounding (the LUT only has positive values)
-			Driver.CompressorLUT[i] = (int32_t)((log2(i * (1.0 / 32768.0)) * LN2_32768) + (32768.0 + 0.5));
-		}
-	}
-
-	return true;
-}
-
 bool WAVWriter_InitSound(int32_t mixingFrequency)
 {
 	if (mixingFrequency < 16000)
@@ -612,9 +580,6 @@ bool WAVWriter_InitSound(int32_t mixingFrequency)
 
 	MixBuffer = (int32_t *)malloc(MaxSamplesToMix * 2 * sizeof (int32_t));
 	if (MixBuffer == NULL)
-		return false;
-
-	if (!CalculateCompressorLUT())
 		return false;
 
 	LastClickRemovalLeft = LastClickRemovalRight = 0;
@@ -633,11 +598,5 @@ void WAVWriter_UninitSound(void)
 	{
 		free(MixBuffer);
 		MixBuffer = NULL;
-	}
-
-	if (Driver.CompressorLUT != NULL)
-	{
-		free(Driver.CompressorLUT);
-		Driver.CompressorLUT = NULL;
 	}
 }
