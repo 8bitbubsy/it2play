@@ -13,8 +13,11 @@
     <Filter Include="it2drivers">
       <UniqueIdentifier>{2f625b78-ff14-4068-aa78-ed3f3a68ec20}</UniqueIdentifier>
     </Filter>
-    <Filter Include="mmcmp">
-      <UniqueIdentifier>{e13bf950-3464-42fc-9932-06f09c42f4c5}</UniqueIdentifier>
+    <Filter Include="loaders">
+      <UniqueIdentifier>{6b30c647-88a3-4f23-b9b7-121798d304ff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="loaders\mmcmp">
+      <UniqueIdentifier>{a1b0610f-ac41-4f4f-a832-3afea1ea0cd5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -52,10 +55,16 @@
     <ClCompile Include="..\src\posix.c">
       <Filter>it2play</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\mmcmp\mmcmp_unpack.c">
-      <Filter>mmcmp</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\it_structs.c" />
+    <ClCompile Include="..\..\loaders\it.c">
+      <Filter>loaders</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\loaders\mmcmp\mmcmp.c">
+      <Filter>loaders\mmcmp</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\loaders\mod.c">
+      <Filter>loaders</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\audiodrivers\winmm\winmm.h">
@@ -90,8 +99,14 @@
     <ClInclude Include="..\src\posix.h">
       <Filter>it2play</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\mmcmp\mmcmp_unpack.h">
-      <Filter>mmcmp</Filter>
+    <ClInclude Include="..\..\loaders\it.h">
+      <Filter>loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\loaders\mmcmp\mmcmp.h">
+      <Filter>loaders\mmcmp</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\loaders\mod.h">
+      <Filter>loaders</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

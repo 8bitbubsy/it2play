@@ -23,7 +23,7 @@
 static bool (*DriverInitSound)(int32_t);
 static void (*DriverUninitSound)(void);
 static void (*DriverMix)(int32_t, int16_t *);
-static void (*DriverResetMixerTick)(void);
+static void (*DriverResetMixer)(void);
 static void (*DriverPostMix)(int16_t *, int32_t);
 static void (*DriverMixSamples)(void);
 
@@ -112,6 +112,41 @@ void RecalculateAllVolumes(void)
 	slaveChn_t *sc = sChn;
 	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
 		sc->Flags |= (SF_RECALC_PAN | SF_RECALC_VOL);
+}
+
+void Music_SetDefaultMIDIDataArea(void) // 8bb: added this
+{
+	// fill default MIDI configuration values (important for filters)
+
+	memset(MIDIDataArea, 0, (9+16+128)*32); // data is padded with zeroes, not spaces!
+
+	// MIDI commands
+	memcpy(&MIDIDataArea[0*32], "FF", 2);
+	memcpy(&MIDIDataArea[1*32], "FC", 2);
+	memcpy(&MIDIDataArea[3*32], "9c n v", 6);
+	memcpy(&MIDIDataArea[4*32], "9c n 0", 6);
+	memcpy(&MIDIDataArea[8*32], "Cc p", 4);
+
+	// macro setup (SF0)
+	memcpy(&MIDIDataArea[9*32], "F0F000z", 7);
+
+	// macro setup (Z80..Z8F)
+	memcpy(&MIDIDataArea[25*32], "F0F00100", 8);
+	memcpy(&MIDIDataArea[26*32], "F0F00108", 8);
+	memcpy(&MIDIDataArea[27*32], "F0F00110", 8);
+	memcpy(&MIDIDataArea[28*32], "F0F00118", 8);
+	memcpy(&MIDIDataArea[29*32], "F0F00120", 8);
+	memcpy(&MIDIDataArea[30*32], "F0F00128", 8);
+	memcpy(&MIDIDataArea[31*32], "F0F00130", 8);
+	memcpy(&MIDIDataArea[32*32], "F0F00138", 8);
+	memcpy(&MIDIDataArea[33*32], "F0F00140", 8);
+	memcpy(&MIDIDataArea[34*32], "F0F00148", 8);
+	memcpy(&MIDIDataArea[35*32], "F0F00150", 8);
+	memcpy(&MIDIDataArea[36*32], "F0F00158", 8);
+	memcpy(&MIDIDataArea[37*32], "F0F00160", 8);
+	memcpy(&MIDIDataArea[38*32], "F0F00168", 8);
+	memcpy(&MIDIDataArea[39*32], "F0F00170", 8);
+	memcpy(&MIDIDataArea[40*32], "F0F00178", 8);
 }
 
 char *Music_GetMIDIDataArea(void)
@@ -207,7 +242,6 @@ static void SetFilterResonance(hostChn_t *hc, slaveChn_t *sc, uint8_t value) // 
 	MIDISendFilter(hc, sc, value);
 }
 
-// 8bb: This is HORRIBLE!!
 void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 {
 	if (!(Driver.Flags & DF_SUPPORTS_MIDI))
@@ -1377,9 +1411,14 @@ static void UpdateGOTONote(void) // Get offset
 			if (chNr & 0x80)
 				hc->Msk = *p++;
 
-			if (hc->Msk & 1) hc->Nte = *p++;
-			if (hc->Msk & 2) hc->Ins = *p++;
-			if (hc->Msk & 4) hc->Vol = *p++;
+			if (hc->Msk & 1)
+				hc->Nte = *p++;
+
+			if (hc->Msk & 2)
+				hc->Ins = *p++;
+
+			if (hc->Msk & 4)
+				hc->Vol = *p++;
 
 			if (hc->Msk & 8)
 			{
@@ -1416,9 +1455,14 @@ static void UpdateNoteData(void)
 		if (chNr & 0x80)
 			hc->Msk = *p++;
 
-		if (hc->Msk & 1) hc->Nte = *p++;
-		if (hc->Msk & 2) hc->Ins = *p++;
-		if (hc->Msk & 4) hc->Vol = *p++;
+		if (hc->Msk & 1)
+			hc->Nte = *p++;
+
+		if (hc->Msk & 2)
+			hc->Ins = *p++;
+
+		if (hc->Msk & 4)
+			hc->Vol = *p++;
 
 		if (hc->Msk & 8)
 		{
@@ -1919,7 +1963,7 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 		DriverSetTempo = SB16_SetTempo;
 		DriverSetMixVolume = SB16_SetMixVolume;
 		DriverFixSamples = SB16_FixSamples;
-		DriverResetMixerTick = SB16_ResetMixerTick; // 8bb: added this
+		DriverResetMixer = SB16_ResetMixer; // 8bb: added this
 		DriverPostMix = SB16_PostMix; // 8bb: added this
 		DriverMixSamples = SB16_MixSamples; // 8bb: added this
 
@@ -1933,7 +1977,7 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 		DriverSetTempo = WAVWriter_SetTempo;
 		DriverSetMixVolume = WAVWriter_SetMixVolume;
 		DriverFixSamples = WAVWriter_FixSamples;
-		DriverResetMixerTick = WAVWriter_ResetMixerTick;
+		DriverResetMixer = WAVWriter_ResetMixer;
 		DriverPostMix = WAVWriter_PostMix;
 		DriverMixSamples = WAVWriter_MixSamples;
 
@@ -1947,7 +1991,7 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 		DriverSetTempo = SB16MMX_SetTempo;
 		DriverSetMixVolume = SB16MMX_SetMixVolume;
 		DriverFixSamples = SB16MMX_FixSamples;
-		DriverResetMixerTick = SB16MMX_ResetMixerTick;
+		DriverResetMixer = SB16MMX_ResetMixer;
 		DriverPostMix = SB16MMX_PostMix;
 		DriverMixSamples = SB16MMX_MixSamples;
 
@@ -2205,7 +2249,7 @@ void Music_PlaySong(uint16_t order)
 
 	InterpretState = InterpretType = 0; // 8bb: clear MIDI filter interpretor state
 
-	DriverResetMixerTick();
+	DriverResetMixer();
 	Song.Playing = true;
 }
 
@@ -2307,6 +2351,22 @@ void Music_ReleaseAllSamples(void)
 {
 	for (int32_t i = 0; i < MAX_SAMPLES; i++)
 		Music_ReleaseSample(i);
+}
+
+void Music_FreeSong(void) // 8bb: added this
+{
+	lockMixer();
+	Music_Stop();
+
+	Music_ReleaseAllPatterns();
+	Music_ReleaseAllSamples();
+
+	memset(&Song, 0, sizeof (Song));
+	memset(Song.Orders, 255, MAX_ORDERS);
+
+	Song.Loaded = false;
+
+	unlockMixer();
 }
 
 int32_t Music_GetActiveVoices(void) // 8bb: added this

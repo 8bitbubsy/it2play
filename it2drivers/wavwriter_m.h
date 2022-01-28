@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include "../it_structs.h"
 
+// 8bb: assumed max sample data output from cubic spline + filter routines, after heavy testing
+#define MAX_SAMPLE_VALUE 230242 
+
 #define RAMPSPEED 8
 #define RAMPCOMPENSATE 255
 

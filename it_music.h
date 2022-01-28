@@ -45,6 +45,7 @@ extern void (*DriverSetMixVolume)(uint8_t);
 extern void (*DriverFixSamples)(void);
 // --------------------------------------------
 
+void Music_SetDefaultMIDIDataArea(void); // 8bb: added this
 char *Music_GetMIDIDataArea(void);
 void RecalculateAllVolumes(void);
 void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input);
@@ -80,5 +81,6 @@ void Music_ReleasePattern(uint32_t pattern);
 void Music_ReleaseAllPatterns(void);
 int32_t Music_GetActiveVoices(void); // 8bb: added this
 bool Music_RenderToWAV(const char *filenameOut); // 8bb: added this
+void Music_FreeSong(void); // 8bb: added this
 
 extern bool WAVRender_Flag; // 8bb: added this

@@ -10,43 +10,45 @@
 #include "wavwriter.h"
 #include "wavwriter_m.h"
 
-/* 8bb: Weird value, I know. From IT2.14 free WAV writer code.
-** It uses a fast algorithm to clamp, and these are the exact 
-** min/max ranges you get in the end.
-*/
-
-#define FILTER_CLAMP 65535.9961f
-
 #define Get8BitWaveForm \
 	fSample = IT2_Cubic8(base, smp, sc->SmpError); \
 	fSample *= sc->fFiltera; \
-	fSample += sc->fOldSamples[0] * sc->fFilterb; \
-	fSample += sc->fOldSamples[1] * sc->fFilterc; \
-	\
-	sample = (int32_t)fSample; \
-	\
-	     if (fSample < -FILTER_CLAMP) fSample = -FILTER_CLAMP; \
-	else if (fSample >  FILTER_CLAMP) fSample =  FILTER_CLAMP; \
+	f1 = sc->fOldSamples[0]; \
+	f1 *= sc->fFilterb; \
+	f2 = sc->fOldSamples[1]; \
+	f2 *= sc->fFilterc; \
+	f1 += f2; \
+	fSample += f1; \
 	\
 	sc->fOldSamples[1] = sc->fOldSamples[0]; \
 	sc->fOldSamples[0] = fSample; \
 	\
-	
+	if (fSample < 0.0f) \
+		fSample -= 0.5f; \
+	else if (fSample > 0.0f) \
+		fSample += 0.5f; \
+	\
+	sample = FastCompressAndQuantizeSample(fSample);
 
 #define Get16BitWaveForm \
 	fSample = IT2_Cubic16(base, smp, sc->SmpError); \
 	fSample *= sc->fFiltera; \
-	fSample += sc->fOldSamples[0] * sc->fFilterb; \
-	fSample += sc->fOldSamples[1] * sc->fFilterc; \
-	\
-	sample = (int32_t)fSample; \
-	\
-	     if (fSample < -FILTER_CLAMP) fSample = -FILTER_CLAMP; \
-	else if (fSample >  FILTER_CLAMP) fSample =  FILTER_CLAMP; \
+	f1 = sc->fOldSamples[0]; \
+	f1 *= sc->fFilterb; \
+	f2 = sc->fOldSamples[1]; \
+	f2 *= sc->fFilterc; \
+	f1 += f2; \
+	fSample += f1; \
 	\
 	sc->fOldSamples[1] = sc->fOldSamples[0]; \
 	sc->fOldSamples[0] = fSample; \
 	\
+	if (fSample < 0.0f) \
+		fSample -= 0.5f; \
+	else if (fSample > 0.0f) \
+		fSample += 0.5f; \
+	\
+	sample = FastCompressAndQuantizeSample(fSample);
 
 #define MixSample \
 	LastLeftValue  = sample * sc->CurrVolL; \
@@ -108,48 +110,116 @@ const mixFunc WAVWriter_MixFunctionTables[4] =
 
 int32_t LastLeftValue, LastRightValue; // 8bb: globalized
 
+// 8bb: these two have very small rounding errors, so I keep them as IT2 constants
+static const float Const256On6 = 42.6666641f;
+static const float Const1On6 = 0.166666657f;
+
+static inline int32_t FastCompressAndQuantizeSample(float fSample)
+{
+	int32_t InputSample = (int32_t)fSample;
+	const int32_t XORMask = InputSample >> 31;
+
+	InputSample ^= XORMask;
+	InputSample -= XORMask;
+
+	if (InputSample > MAX_SAMPLE_VALUE) // 8bb: fast branchless operation
+		InputSample = MAX_SAMPLE_VALUE;
+
+	return (Driver.CompressorLUT[InputSample] ^ XORMask) - XORMask;
+}
+
 // 8bb: these two routines seem to be Cubic Lagrange (?)
 
 static inline float IT2_Cubic8(int8_t *base, int8_t *smp, int32_t frac)
 {
+	float F, a, b, c, d;
+
 	int32_t tap0Smp = -1;
 	if (smp == base)
 		tap0Smp = 0; // 8bb: if (SamplingPos == 0) tap0Smp = 0 (turns into branchless code)
 
+	// 8bb: done like this to match precision loss in IT2 code (FPU is in 24-bit (32) mode)
+
 	float s1 = smp[tap0Smp];
-	float s2 = smp[0] * 3.0f;
-	float s3 = smp[1] * 3.0f;
+	float s2 = smp[0];
+	float s3 = smp[1];
 	float s4 = smp[2];
-	float fFrac = (float)frac * (1.0f / 65536.0f);
+	float fFrac = (float)frac;
 
-	const float F = s4 + s2;
-	const float d = s2 + s2;
-	const float a = F - s3 - s1;
-	const float b = ((s1 * 3.0f) - d) + s3;
-	const float c = ((s3 - s1) * 2.0f) - F;
+	fFrac *= 1.0f / 65536.0f;
+	s2 *= 3.0f;
+	s3 *= 3.0f;
 
-	return ((((((a * fFrac) + b) * fFrac) + c) * fFrac) + d) * (256.0f / 6.0f);
+	F = s4;
+	F += s2;
+	c = s3;
+	c -= s1;
+	c += c;
+	c -= F;
+	a = F;
+	a -= s3;
+	a -= s1;
+	a *= fFrac;
+	d = s2;
+	d += d;
+	b = s1;
+	b *= 3.0f;
+	b -= d;
+	b += s3;
+	b += a;
+	b *= fFrac;
+	b += c;
+	b *= fFrac;
+	b += d;
+	b *= Const256On6; // 8bb: b = (b * 256.0f) / 6.0f
+
+	return b;
 }
 
 static inline float IT2_Cubic16(int16_t *base, int16_t *smp, int32_t frac)
 {
+	float F, a, b, c, d;
+
 	int32_t tap0Smp = -1;
 	if (smp == base)
 		tap0Smp = 0; // 8bb: if (SamplingPos == 0) tap0Smp = 0 (turns into branchless code)
 
+	// 8bb: done like this to match precision loss in IT2 code (FPU is in 24-bit (32) mode)
+
 	float s1 = smp[tap0Smp];
-	float s2 = smp[0] * 3.0f;
-	float s3 = smp[1] * 3.0f;
+	float s2 = smp[0];
+	float s3 = smp[1];
 	float s4 = smp[2];
-	float fFrac = (float)frac * (1.0f / 65536.0f);
+	float fFrac = (float)frac;
 
-	const float F = s4 + s2;
-	const float d = s2 + s2;
-	const float a = F - s3 - s1;
-	const float b = ((s1 * 3.0f) - d) + s3;
-	const float c = ((s3 - s1) * 2.0f) - F;
+	fFrac *= 1.0f / 65536.0f;
+	s2 *= 3.0f;
+	s3 *= 3.0f;
 
-	return ((((((a * fFrac) + b) * fFrac) + c) * fFrac) + d) * (1.0f / 6.0f);
+	F = s4;
+	F += s2;
+	c = s3;
+	c -= s1;
+	c += c;
+	c -= F;
+	a = F;
+	a -= s3;
+	a -= s1;
+	a *= fFrac;
+	d = s2;
+	d += d;
+	b = s1;
+	b *= 3.0f;
+	b -= d;
+	b += s3;
+	b += a;
+	b *= fFrac;
+	b += c;
+	b *= fFrac;
+	b += d;
+	b *= Const1On6; // 8bb: b /= 6.0f
+
+	return b;
 }
 
 void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
@@ -158,7 +228,7 @@ void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SampleOffset;
 	int32_t sample;
-	float fSample;
+	float f1, f2, fSample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
 	{
@@ -183,7 +253,7 @@ void Mix32Stereo16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SampleOffset;
 	int32_t sample;
-	float fSample;
+	float f1, f2, fSample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
 	{
@@ -208,7 +278,7 @@ void Mix32Surround8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SampleOffset;
 	int32_t sample;
-	float fSample;
+	float f1, f2, fSample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
 	{
@@ -235,7 +305,7 @@ void Mix32Surround16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SampleOffset;
 	int32_t sample;
-	float fSample;
+	float f1, f2, fSample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
 	{

@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
 
 	Music_PlaySong(0);
 
-	printf("Playing, press ESC to stop...\n");
+	printf("Press ESC to stop...\n");
 	printf("\n");
 	printf("Controls:\n");
 	printf(" Esc=Quit   Plus = inc. song pos   Minus = dec. song pos\n");
@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 	printf("Mixing volume: %d/128\n", Song.Header.MixVolume);
 	printf("Mixing frequency: %dHz\n", mixingFrequency);
 	printf("IT2 sound driver: %s\n",
-		(IT2SoundDriver == DRIVER_WAVWRITER) ? "WAV writer (filter clip: limit, no compression)" :
+		(IT2SoundDriver == DRIVER_WAVWRITER) ? "WAV writer (v2.15/registered)" :
 		(IT2SoundDriver == DRIVER_SB16MMX)   ? "SB16 MMX"   :
 		(IT2SoundDriver == DRIVER_SB16)      ? "SB16"       : "Unknown");
 	printf("\n");
@@ -165,8 +165,12 @@ int main(int argc, char *argv[])
 			if (orderEnd > 0)
 				orderEnd--;
 		}
+		else
+		{
+			orderEnd = 0;
+		}
 
-		printf("Playing, Order: %d/%d, Pattern: %d, Row: %d/%d, %d Channels      \r",
+		printf(" Playing, Order: %d/%d, Pattern: %d, Row: %d/%d, %d Channels      \r",
 			currOrder, orderEnd,
 			Song.CurrentPattern,
 			Song.CurrentRow, Song.NumberOfRows,

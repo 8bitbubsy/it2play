@@ -32,7 +32,9 @@
     <ClCompile Include="..\..\it_m_eff.c" />
     <ClCompile Include="..\..\it_structs.c" />
     <ClCompile Include="..\..\it_tables.c" />
-    <ClCompile Include="..\..\mmcmp\mmcmp_unpack.c" />
+    <ClCompile Include="..\..\loaders\it.c" />
+    <ClCompile Include="..\..\loaders\mmcmp\mmcmp.c" />
+    <ClCompile Include="..\..\loaders\mod.c" />
     <ClCompile Include="..\src\it2play.c" />
     <ClCompile Include="..\src\posix.c" />
   </ItemGroup>
@@ -50,7 +52,9 @@
     <ClInclude Include="..\..\it_m_eff.h" />
     <ClInclude Include="..\..\it_structs.h" />
     <ClInclude Include="..\..\it_tables.h" />
-    <ClInclude Include="..\..\mmcmp\mmcmp_unpack.h" />
+    <ClInclude Include="..\..\loaders\it.h" />
+    <ClInclude Include="..\..\loaders\mmcmp\mmcmp.h" />
+    <ClInclude Include="..\..\loaders\mod.h" />
     <ClInclude Include="..\src\posix.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -146,7 +150,6 @@
       <ExceptionHandling>false</ExceptionHandling>
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>

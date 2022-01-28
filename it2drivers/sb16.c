@@ -284,7 +284,7 @@ void SB16_SetMixVolume(uint8_t vol)
 	RecalculateAllVolumes();
 }
 
-void SB16_ResetMixerTick(void) // 8bb: added this
+void SB16_ResetMixer(void) // 8bb: added this
 {
 	MixTransferRemaining = 0;
 	MixTransferOffset = 0;
