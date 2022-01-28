@@ -461,8 +461,10 @@ void InitCommandA(hostChn_t *hc)
 
 void InitCommandB(hostChn_t *hc)
 {
+	/*
 	if (hc->CmdVal <= Song.CurrentOrder)
 		Song.StopSong = true; // 8bb: for WAV writer
+	*/
 
 	Song.ProcessOrder = hc->CmdVal - 1;
 	Song.ProcessRow = 0xFFFE;
