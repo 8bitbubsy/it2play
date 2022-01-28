@@ -16,3 +16,6 @@ it2play/vs2019_project/x64/Debug/it2play.vcxproj.FileListAbsolute.txt
 it2play/vs2019_project/x64/Debug/it2play.exe
 *.ilk
 *.pdb
+*.idb
+it2play/vs2019_project/Debug/it2play.vcxproj.FileListAbsolute.txt
+*.exe
