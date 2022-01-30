@@ -380,7 +380,9 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 	Song.Header.MixVolume = 48;
 	Song.Header.InitialSpeed = 6;
 	Song.Header.InitialTempo = 125;
-	Song.Header.PanSep = 64; // Separation of 64
+
+	// Separation of 64 (8bb: this should've been 128 for multi-ch MODs - it ruins pan commands!)
+	Song.Header.PanSep = 64;
 
 	if (MODNumberOfChannels <= 8)
 	{
@@ -430,9 +432,6 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 		uint16_t Length16, LoopBeg16, LoopLen16;
 		uint8_t FineTune, Volume;
 
-		s->Cvt = 1; // Convert signed->Unsigned
-		s->DfP = 32;
-
 		if (!ReadBytes(m, s->SampleName, 22)) return false;
 		if (!ReadBytes(m, &Length16, 2)) return false;
 		if (!ReadBytes(m, &FineTune, 1)) return false;
@@ -473,6 +472,7 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 		s->LoopBeg = LoopBeg;
 		s->LoopEnd = LoopEnd;
 		s->Length = Length;
+		s->DfP = 32;
 		s->GvL = 64;
 		s->Vol = Volume;
 		s->C5Speed = FineTuneTable[FineTune];
