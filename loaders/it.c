@@ -16,254 +16,10 @@
 static uint8_t decompBuffer[65536];
 static int32_t ptrListOffset;
 
-static void D_Decompress16BitData(int16_t *dst, uint8_t *src, uint32_t blockLen)
-{
-	uint8_t byte8, bitDepth, bitDepthInv, bitsRead;
-	uint16_t bytes16, lastVal;
-	uint32_t bytes32;
-
-	lastVal = 0;
-	bitDepth = 17;
-	bitDepthInv = bitsRead = 0;
-
-	blockLen >>= 1;
-	while (blockLen != 0)
-	{
-		bytes32 = (*(uint32_t *)src) >> bitsRead;
-
-		bitsRead += bitDepth;
-		src += bitsRead >> 3;
-		bitsRead &= 7;
-
-		if (bitDepth <= 6)
-		{
-			bytes32 <<= bitDepthInv & 0x1F;
-
-			bytes16 = (uint16_t)bytes32;
-			if (bytes16 != 0x8000)
-			{
-				lastVal += (int16_t)bytes16 >> (bitDepthInv & 0x1F); // arithmetic shift
-				*dst++ = lastVal;
-				blockLen--;
-			}
-			else
-			{
-				byte8 = ((bytes32 >> 16) & 0xF) + 1;
-				if (byte8 >= bitDepth)
-					byte8++;
-				bitDepth = byte8;
-
-				bitDepthInv = 16;
-				if (bitDepthInv < bitDepth)
-					bitDepthInv++;
-				bitDepthInv -= bitDepth;
-
-				bitsRead += 4;
-			}
-
-			continue;
-		}
-
-		bytes16 = (uint16_t)bytes32;
-
-		if (bitDepth <= 16)
-		{
-			uint16_t DX = 0xFFFF >> (bitDepthInv & 0x1F);
-			bytes16 &= DX;
-			DX = (DX >> 1) - 8;
-
-			if (bytes16 > DX+16 || bytes16 <= DX)
-			{
-				bytes16 <<= bitDepthInv & 0x1F;
-				bytes16 = (int16_t)bytes16 >> (bitDepthInv & 0x1F); // arithmetic shift
-				lastVal += bytes16;
-				*dst++ = lastVal;
-				blockLen--;
-				continue;
-			}
-
-			byte8 = (uint8_t)(bytes16 - DX);
-			if (byte8 >= bitDepth)
-				byte8++;
-			bitDepth = byte8;
-
-			bitDepthInv = 16;
-			if (bitDepthInv < bitDepth)
-				bitDepthInv++;
-			bitDepthInv -= bitDepth;
-			continue;
-		}
-
-		if (bytes32 & 0x10000)
-		{
-			bitDepth = (uint8_t)(bytes16 + 1);
-			bitDepthInv = 16 - bitDepth;
-		}
-		else
-		{
-			lastVal += bytes16;
-			*dst++ = lastVal;
-			blockLen--;
-		}
-	}
-}
-
-static void D_Decompress8BitData(int8_t *dst, uint8_t *src, uint32_t blockLen)
-{
-	uint8_t lastVal, byte8, bitDepth, bitDepthInv, bitsRead;
-	uint16_t bytes16;
-
-	lastVal = 0;
-	bitDepth = 9;
-	bitDepthInv = bitsRead = 0;
-
-	while (blockLen != 0)
-	{
-		bytes16 = (*(uint16_t *)src) >> bitsRead;
-
-		bitsRead += bitDepth;
-		src += (bitsRead >> 3);
-		bitsRead &= 7;
-
-		byte8 = bytes16 & 0xFF;
-
-		if (bitDepth <= 6)
-		{
-			bytes16 <<= (bitDepthInv & 0x1F);
-			byte8 = bytes16 & 0xFF;
-
-			if (byte8 != 0x80)
-			{
-				lastVal += (int8_t)byte8 >> (bitDepthInv & 0x1F); // arithmetic shift
-				*dst++ = lastVal;
-				blockLen--;
-				continue;
-			}
-
-			byte8 = (bytes16 >> 8) & 7;
-			bitsRead += 3;
-			src += (bitsRead >> 3);
-			bitsRead &= 7;
-		}
-		else
-		{
-			if (bitDepth == 8)
-			{
-				if (byte8 < 0x7C || byte8 > 0x83)
-				{
-					lastVal += byte8;
-					*dst++ = lastVal;
-					blockLen--;
-					continue;
-				}
-				byte8 -= 0x7C;
-			}
-			else if (bitDepth < 8)
-			{
-				byte8 <<= 1;
-				if (byte8 < 0x78 || byte8 > 0x86)
-				{
-					lastVal += (int8_t)byte8 >> (bitDepthInv & 0x1F); // arithmetic shift
-					*dst++ = lastVal;
-					blockLen--;
-					continue;
-				}
-				byte8 = (byte8 >> 1) - 0x3C;
-			}
-			else
-			{
-				bytes16 &= 0x1FF;
-				if ((bytes16 & 0x100) == 0)
-				{
-					lastVal += byte8;
-					*dst++ = lastVal;
-					blockLen--;
-					continue;
-				}
-			}
-		}
-
-		byte8++;
-		if (byte8 >= bitDepth)
-			byte8++;
-		bitDepth = byte8;
-
-		bitDepthInv = 8;
-		if (bitDepthInv < bitDepth)
-			bitDepthInv++;
-		bitDepthInv -= bitDepth;
-	}
-}
-
-static void IT_LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded)
-{
-	uint16_t packedLen;
-
-	int8_t *dstPtr = (int8_t *)s->Data;
-
-	uint32_t i = s->Length;
-	while (i > 0)
-	{
-		uint32_t bytesToUnpack = 32768;
-		if (bytesToUnpack > i)
-			bytesToUnpack = i;
-
-		mread(&packedLen, sizeof (uint16_t), 1, m);
-		mread(decompBuffer, 1, packedLen, m);
-
-		D_Decompress16BitData((int16_t *)dstPtr, decompBuffer, bytesToUnpack);
-
-		if (deltaEncoded) // convert from delta values to PCM
-		{
-			int16_t *ptr16 = (int16_t *)dstPtr;
-			int16_t lastSmp16 = 0; // yes, reset this every block!
-
-			const uint32_t len = bytesToUnpack >> 1;
-			for (uint32_t j = 0; j < len; j++)
-			{
-				lastSmp16 += ptr16[j];
-				ptr16[j] = lastSmp16;
-			}
-		}
-
-		dstPtr += bytesToUnpack;
-		i -= bytesToUnpack;
-	}
-}
-
-static void IT_LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded)
-{
-	uint16_t packedLen;
-	int8_t *dstPtr = (int8_t *)s->Data;
-
-	uint32_t i = s->Length;
-	while (i > 0)
-	{
-		uint32_t bytesToUnpack = 32768;
-		if (bytesToUnpack > i)
-			bytesToUnpack = i;
-
-		mread(&packedLen, sizeof (uint16_t), 1, m);
-		mread(decompBuffer, 1, packedLen, m);
-
-		D_Decompress8BitData(dstPtr, decompBuffer, bytesToUnpack);
-
-		if (deltaEncoded) // convert from delta values to PCM
-		{
-			int8_t lastSmp8 = 0; // yes, reset this every block!
-
-			const uint32_t len = bytesToUnpack;
-			for (uint32_t j = 0; j < len; j++)
-			{
-				lastSmp8 += dstPtr[j];
-				dstPtr[j] = lastSmp8;
-			}
-		}
-
-		dstPtr += bytesToUnpack;
-		i -= bytesToUnpack;
-	}
-}
+static void D_Decompress16BitData(int16_t *dst, uint8_t *src, uint32_t blockLen);
+static void D_Decompress8BitData(int8_t *dst, uint8_t *src, uint32_t blockLen);
+static void IT_LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded);
+static void IT_LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded);
 
 bool D_LoadIT(MEMFILE *m)
 {
@@ -637,4 +393,253 @@ bool D_LoadIT(MEMFILE *m)
 	}
 
 	return true;
+}
+
+static void D_Decompress16BitData(int16_t *dst, uint8_t *src, uint32_t blockLen)
+{
+	uint8_t byte8, bitDepth, bitDepthInv, bitsRead;
+	uint16_t bytes16, lastVal;
+	uint32_t bytes32;
+
+	lastVal = 0;
+	bitDepth = 17;
+	bitDepthInv = bitsRead = 0;
+
+	blockLen >>= 1;
+	while (blockLen != 0)
+	{
+		bytes32 = (*(uint32_t *)src) >> bitsRead;
+
+		bitsRead += bitDepth;
+		src += bitsRead >> 3;
+		bitsRead &= 7;
+
+		if (bitDepth <= 6)
+		{
+			bytes32 <<= bitDepthInv & 0x1F;
+
+			bytes16 = (uint16_t)bytes32;
+			if (bytes16 != 0x8000)
+			{
+				lastVal += (int16_t)bytes16 >> (bitDepthInv & 0x1F); // arithmetic shift
+				*dst++ = lastVal;
+				blockLen--;
+			}
+			else
+			{
+				byte8 = ((bytes32 >> 16) & 0xF) + 1;
+				if (byte8 >= bitDepth)
+					byte8++;
+				bitDepth = byte8;
+
+				bitDepthInv = 16;
+				if (bitDepthInv < bitDepth)
+					bitDepthInv++;
+				bitDepthInv -= bitDepth;
+
+				bitsRead += 4;
+			}
+
+			continue;
+		}
+
+		bytes16 = (uint16_t)bytes32;
+
+		if (bitDepth <= 16)
+		{
+			uint16_t DX = 0xFFFF >> (bitDepthInv & 0x1F);
+			bytes16 &= DX;
+			DX = (DX >> 1) - 8;
+
+			if (bytes16 > DX+16 || bytes16 <= DX)
+			{
+				bytes16 <<= bitDepthInv & 0x1F;
+				bytes16 = (int16_t)bytes16 >> (bitDepthInv & 0x1F); // arithmetic shift
+				lastVal += bytes16;
+				*dst++ = lastVal;
+				blockLen--;
+				continue;
+			}
+
+			byte8 = (uint8_t)(bytes16 - DX);
+			if (byte8 >= bitDepth)
+				byte8++;
+			bitDepth = byte8;
+
+			bitDepthInv = 16;
+			if (bitDepthInv < bitDepth)
+				bitDepthInv++;
+			bitDepthInv -= bitDepth;
+			continue;
+		}
+
+		if (bytes32 & 0x10000)
+		{
+			bitDepth = (uint8_t)(bytes16 + 1);
+			bitDepthInv = 16 - bitDepth;
+		}
+		else
+		{
+			lastVal += bytes16;
+			*dst++ = lastVal;
+			blockLen--;
+		}
+	}
+}
+
+static void D_Decompress8BitData(int8_t *dst, uint8_t *src, uint32_t blockLen)
+{
+	uint8_t lastVal, byte8, bitDepth, bitDepthInv, bitsRead;
+	uint16_t bytes16;
+
+	lastVal = 0;
+	bitDepth = 9;
+	bitDepthInv = bitsRead = 0;
+
+	while (blockLen != 0)
+	{
+		bytes16 = (*(uint16_t *)src) >> bitsRead;
+
+		bitsRead += bitDepth;
+		src += (bitsRead >> 3);
+		bitsRead &= 7;
+
+		byte8 = bytes16 & 0xFF;
+
+		if (bitDepth <= 6)
+		{
+			bytes16 <<= (bitDepthInv & 0x1F);
+			byte8 = bytes16 & 0xFF;
+
+			if (byte8 != 0x80)
+			{
+				lastVal += (int8_t)byte8 >> (bitDepthInv & 0x1F); // arithmetic shift
+				*dst++ = lastVal;
+				blockLen--;
+				continue;
+			}
+
+			byte8 = (bytes16 >> 8) & 7;
+			bitsRead += 3;
+			src += (bitsRead >> 3);
+			bitsRead &= 7;
+		}
+		else
+		{
+			if (bitDepth == 8)
+			{
+				if (byte8 < 0x7C || byte8 > 0x83)
+				{
+					lastVal += byte8;
+					*dst++ = lastVal;
+					blockLen--;
+					continue;
+				}
+				byte8 -= 0x7C;
+			}
+			else if (bitDepth < 8)
+			{
+				byte8 <<= 1;
+				if (byte8 < 0x78 || byte8 > 0x86)
+				{
+					lastVal += (int8_t)byte8 >> (bitDepthInv & 0x1F); // arithmetic shift
+					*dst++ = lastVal;
+					blockLen--;
+					continue;
+				}
+				byte8 = (byte8 >> 1) - 0x3C;
+			}
+			else
+			{
+				bytes16 &= 0x1FF;
+				if ((bytes16 & 0x100) == 0)
+				{
+					lastVal += byte8;
+					*dst++ = lastVal;
+					blockLen--;
+					continue;
+				}
+			}
+		}
+
+		byte8++;
+		if (byte8 >= bitDepth)
+			byte8++;
+		bitDepth = byte8;
+
+		bitDepthInv = 8;
+		if (bitDepthInv < bitDepth)
+			bitDepthInv++;
+		bitDepthInv -= bitDepth;
+	}
+}
+
+static void IT_LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded)
+{
+	uint16_t packedLen;
+
+	int8_t *dstPtr = (int8_t *)s->Data;
+
+	uint32_t i = s->Length;
+	while (i > 0)
+	{
+		uint32_t bytesToUnpack = 32768;
+		if (bytesToUnpack > i)
+			bytesToUnpack = i;
+
+		mread(&packedLen, sizeof (uint16_t), 1, m);
+		mread(decompBuffer, 1, packedLen, m);
+
+		D_Decompress16BitData((int16_t *)dstPtr, decompBuffer, bytesToUnpack);
+
+		if (deltaEncoded) // convert from delta values to PCM
+		{
+			int16_t *ptr16 = (int16_t *)dstPtr;
+			int16_t lastSmp16 = 0; // yes, reset this every block!
+
+			const uint32_t len = bytesToUnpack >> 1;
+			for (uint32_t j = 0; j < len; j++)
+			{
+				lastSmp16 += ptr16[j];
+				ptr16[j] = lastSmp16;
+			}
+		}
+
+		dstPtr += bytesToUnpack;
+		i -= bytesToUnpack;
+	}
+}
+
+static void IT_LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded)
+{
+	uint16_t packedLen;
+	int8_t *dstPtr = (int8_t *)s->Data;
+
+	uint32_t i = s->Length;
+	while (i > 0)
+	{
+		uint32_t bytesToUnpack = 32768;
+		if (bytesToUnpack > i)
+			bytesToUnpack = i;
+
+		mread(&packedLen, sizeof (uint16_t), 1, m);
+		mread(decompBuffer, 1, packedLen, m);
+
+		D_Decompress8BitData(dstPtr, decompBuffer, bytesToUnpack);
+
+		if (deltaEncoded) // convert from delta values to PCM
+		{
+			int8_t lastSmp8 = 0; // yes, reset this every block!
+
+			const uint32_t len = bytesToUnpack;
+			for (uint32_t j = 0; j < len; j++)
+			{
+				lastSmp8 += dstPtr[j];
+				dstPtr[j] = lastSmp8;
+			}
+		}
+
+		dstPtr += bytesToUnpack;
+		i -= bytesToUnpack;
+	}
 }
