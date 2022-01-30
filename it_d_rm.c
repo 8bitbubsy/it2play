@@ -262,29 +262,40 @@ void EncodePattern(pattern_t *p, uint8_t Rows)
 	}
 }
 
-static int8_t GetModuleType(uint8_t *Data, uint32_t DataLen)
+static int8_t GetModuleType(uint8_t *Data, uint32_t DataLen) // 8bb: added this function
 {
-	// order of testing has been modified for less false positives
+	// 8bb: order of testing has been modified for less potential false positives
 
-	if (DataLen >= 17 && !memcmp(&Data[0], "Extended Module: ", 17))
+	if (DataLen >= 17 && !memcmp(&Data[0], "Extended Module: ", 17)) // .XM
 		return FORMAT_XM;
 
-	if (DataLen >= 1080+4 && (!memcmp(&Data[1080], "M.K.", 4) || !memcmp(&Data[1080], "M!K!", 4)))
-		return FORMAT_PT;
+	if (DataLen >= 1080+4) // .MOD (31-sample)
+	{
+		char *ID = (char *)&Data[1080];
 
-	if (DataLen >= 4 && !memcmp(&Data[0], "IMPM", 4))
+		if (!memcmp(ID, "M.K.", 4) || !memcmp(ID, "M!K!", 4))
+			return FORMAT_PT;
+
+		if (!memcmp(ID, "6CHN", 4) || !memcmp(ID, "8CHN", 4))
+			return FORMAT_GENERIC_MOD;
+
+		if (ID[0] >= '1' && ID[1] <= '9' && ID[1] >= '0' && ID[1] <= '9' && ID[2] == 'C' && ID[3] == 'H')
+			return FORMAT_GENERIC_MOD;
+	}
+
+	if (DataLen >= 4 && !memcmp(&Data[0], "IMPM", 4)) // .IT
 		return FORMAT_IT;
 
-	if (DataLen >= 4 && !memcmp(&Data[0], "SCRM", 4))
+	if (DataLen >= 4 && !memcmp(&Data[0], "SCRM", 4)) // .S3M
 		return FORMAT_S3M;
 
-	if (DataLen >= 3 && !memcmp(&Data[0], "MTM", 3))
+	if (DataLen >= 3 && !memcmp(&Data[0], "MTM", 3)) // MTM (?)
 		return FORMAT_MT;
 
-	if (DataLen >= 2 && (!memcmp(&Data[0], "if", 2) || !memcmp(Data, "JN", 2))) // poor
+	if (DataLen >= 2 && (!memcmp(&Data[0], "if", 2) || !memcmp(Data, "JN", 2))) // .669 (poor)
 		return FORMAT_669;
 
-	if (DataLen >= 471+1 && Data[471] == 0x78)
+	if (DataLen >= 471+1 && Data[471] == 0x78) // .MOD (15-sample)
 		return FORMAT_MOD15;
 
 	return FORMAT_UNKNOWN;
@@ -337,11 +348,8 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 
 		case FORMAT_PT:
 		case FORMAT_GENERIC_MOD:
-			WasLoaded = D_LoadMOD(m, false);
-			break;
-
 		case FORMAT_MOD15:
-			WasLoaded = D_LoadMOD(m, true);
+			WasLoaded = D_LoadMOD(m, false);
 			break;
 	}
 
