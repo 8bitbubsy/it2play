@@ -262,7 +262,7 @@ void EncodePattern(pattern_t *p, uint8_t Rows)
 	}
 }
 
-static int8_t GetModuleType(uint8_t *Data, uint32_t DataLen) // 8bb: added this function
+static int8_t D_GetSongNameModuleType(uint8_t *Data, uint32_t DataLen)
 {
 	// 8bb: order of testing has been modified for less potential false positives
 
@@ -276,7 +276,7 @@ static int8_t GetModuleType(uint8_t *Data, uint32_t DataLen) // 8bb: added this 
 		if (!memcmp(ID, "M.K.", 4) || !memcmp(ID, "M!K!", 4))
 			return FORMAT_PT;
 
-		if (!memcmp(ID, "6CHN", 4) || !memcmp(ID, "8CHN", 4))
+		if (!memcmp(ID, "FLT4", 4) || !memcmp(ID, "4CHN", 4) || !memcmp(ID, "6CHN", 4) || !memcmp(ID, "8CHN", 4))
 			return FORMAT_GENERIC_MOD;
 
 		if (ID[0] >= '1' && ID[1] <= '9' && ID[1] >= '0' && ID[1] <= '9' && ID[2] == 'C' && ID[3] == 'H')
@@ -321,7 +321,7 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 	if (m == NULL)
 		return false;
 
-	uint8_t Format = GetModuleType(Data, DataLen);
+	uint8_t Format = D_GetSongNameModuleType(Data, DataLen);
 	if (Format == FORMAT_UNKNOWN)
 		goto Error;
 
