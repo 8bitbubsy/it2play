@@ -20,3 +20,4 @@ it2play/vs2019_project/x64/Debug/it2play.exe
 it2play/vs2019_project/Debug/it2play.vcxproj.FileListAbsolute.txt
 *.exe
 *.wav
+*.it
