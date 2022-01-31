@@ -45,9 +45,6 @@ static bool GetChannelCount(MEMFILE *m) // 8bb: added this
 {
 	uint8_t ID[4];
 
-	size_t OldOffset = mtell(m);
-	mseek(m, 1080, SEEK_SET);
-
 	if (meof(m) || !ReadBytes(m, ID, 4))
 		return false;
 
@@ -59,7 +56,6 @@ static bool GetChannelCount(MEMFILE *m) // 8bb: added this
 	else if (ID[0] >= '1' && ID[1] <= '9' && ID[1] >= '0' && ID[1] <= '9' && ID[2] == 'C' && ID[3] == 'H')
 		MODNumberOfChannels = ((ID[0] - '0') * 10) + (ID[1] - '0');
 
-	mseek(m, OldOffset, SEEK_SET);
 	return true;
 }
 
@@ -368,12 +364,8 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 		if (!ReadBytes(m, &MODNumberOfOrders, 1)) return false;
 	}
 
-	if (!GetChannelCount(m)) return false;
-	if (MODNumberOfChannels < 4 || MODNumberOfChannels > MAX_HOST_CHANNELS)
+	if (!GetChannelCount(m) || MODNumberOfChannels < 4 || MODNumberOfChannels > MAX_HOST_CHANNELS)
 		return false;
-
-	mseek(m, 0, SEEK_SET);
-	if (!ReadBytes(m, Song.Header.SongName, 20)) return false;
 
 	Song.Header.Flags = ITF_STEREO | ITF_OLD_EFFECTS | ITF_COMPAT_GXX;
 	Song.Header.GlobalVol = 128;
@@ -418,14 +410,18 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 	// Orders.
 	memset(Song.Orders, 255, MAX_ORDERS);
 	mseek(m, MODOrderOffset, SEEK_SET);
-	mread(Song.Orders, 1, MODNumberOfOrders, m);
+	if (!ReadBytes(m, Song.Orders, MODNumberOfOrders)) return false;
 
 	// Get number of patterns to load
 	uint8_t PatNum = 0;
+	mseek(m, MODOrderOffset, SEEK_SET);
 	for (int32_t i = 0; i < 128; i++)
 	{
-		if (Song.Orders[i] != 255 && Song.Orders[i] > PatNum)
-			PatNum = Song.Orders[i];
+		uint8_t Order;
+		if (!ReadBytes(m, &Order, 1)) return false;
+
+		if (Order > PatNum)
+			PatNum = Order;
 	}
 	PatNum++;
 
@@ -504,7 +500,6 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 
 	Song.Header.OrdNum = MODNumberOfOrders + 1;
 	Song.Header.PatNum = PatNum;
-	Song.Header.InsNum = 0;
 	Song.Header.SmpNum = MODNumberOfInstruments;
 
 	return true;

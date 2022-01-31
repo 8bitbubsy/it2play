@@ -262,43 +262,86 @@ void EncodePattern(pattern_t *p, uint8_t Rows)
 	}
 }
 
-static int8_t D_GetSongNameModuleType(uint8_t *Data, uint32_t DataLen)
+static int8_t D_GetSongNameModuleType(MEMFILE *m)
 {
+	static uint8_t Header[1080+4];
+	
+	mseek(m, 0, SEEK_END);
+	size_t DataLen = mtell(m);
+	mseek(m, 0, SEEK_SET);
+
+	mread(Header, 1, sizeof (Header), m);
+
+	char *ID = (char *)&Header[1080];
+	int8_t Format = FORMAT_UNKNOWN;
+	int32_t NameOffset = 0, NameLength = 0;
+
 	// 8bb: order of testing has been modified for less potential false positives
 
-	if (DataLen >= 17 && !memcmp(&Data[0], "Extended Module: ", 17)) // .XM
-		return FORMAT_XM;
-
-	if (DataLen >= 1080+4) // .MOD (31-sample)
+	if (DataLen >= 17 && !memcmp(&Header[0], "Extended Module: ", 17)) // 8bb: .XM
 	{
-		char *ID = (char *)&Data[1080];
-
-		if (!memcmp(ID, "M.K.", 4) || !memcmp(ID, "M!K!", 4))
-			return FORMAT_PT;
-
-		if (!memcmp(ID, "FLT4", 4) || !memcmp(ID, "4CHN", 4) || !memcmp(ID, "6CHN", 4) || !memcmp(ID, "8CHN", 4))
-			return FORMAT_GENERIC_MOD;
-
-		if (ID[0] >= '1' && ID[1] <= '9' && ID[1] >= '0' && ID[1] <= '9' && ID[2] == 'C' && ID[3] == 'H')
-			return FORMAT_GENERIC_MOD;
+		NameOffset = 17;
+		NameLength = 20;
+		Format = FORMAT_XM;
+	}
+	else if (DataLen >= 1080+4 && (!memcmp(ID, "M.K.", 4) || !memcmp(ID, "M!K!", 4))) // 8bb: ProTracker .MOD
+	{
+		NameOffset = 0;
+		NameLength = 20;
+		Format = FORMAT_PT;
+	}
+	else if (DataLen >= 1080+4 && (!memcmp(ID, "FLT4", 4) || !memcmp(ID, "4CHN", 4) || !memcmp(ID, "6CHN", 4) || !memcmp(ID, "8CHN", 4))) // 8bb: generic multi-ch .MOD
+	{
+		NameOffset = 0;
+		NameLength = 20;
+		Format = FORMAT_GENERIC_MOD;
+	}
+	else if (DataLen >= 1080+4 && (ID[0] >= '1' && ID[1] <= '9' && ID[1] >= '0' && ID[1] <= '9' && ID[2] == 'C' && ID[3] == 'H')) // 8bb: generic multi-ch .MOD
+	{
+		NameOffset = 0;
+		NameLength = 20;
+		Format = FORMAT_GENERIC_MOD;
+	}
+	else if (DataLen >= 4 && !memcmp(&Header[0], "IMPM", 4)) // 8bb: .IT
+	{
+		NameOffset = 4;
+		NameLength = 25;
+		Format = FORMAT_IT;
+	}
+	else if (DataLen >= 44+4 && !memcmp(&Header[44], "SCRM", 4)) // 8bb: .S3M
+	{
+		NameOffset = 0;
+		NameLength = 25;
+		Format = FORMAT_S3M;
+	}
+	else if (DataLen >= 3 && !memcmp(&Header[0], "MTM", 3)) // 8bb: MTM (?)
+	{
+		NameOffset = 4;
+		NameLength = 20;
+		Format = FORMAT_MT;
+	}
+	else if (DataLen >= 2 && (!memcmp(&Header[0], "if", 2) || !memcmp(Header, "JN", 2))) // 8bb: .669 (poor test)
+	{
+		NameOffset = 2;
+		NameLength = 25;
+		Format = FORMAT_669;
+	}
+	else if (DataLen >= 471+1 && Header[471] == 0x78) // 8bb: last test, let's assume this is a 15-sample .MOD
+	{
+		NameOffset = 0;
+		NameLength = 20;
+		Format = FORMAT_MOD15;
 	}
 
-	if (DataLen >= 4 && !memcmp(&Data[0], "IMPM", 4)) // .IT
-		return FORMAT_IT;
+	// 8bb: read song name
+	if (Format != FORMAT_UNKNOWN)
+	{
+		mseek(m, NameOffset, SEEK_SET);
+		mread(Song.Header.SongName, 1, NameLength, m);
+		mseek(m, 0, SEEK_SET);
+	}
 
-	if (DataLen >= 4 && !memcmp(&Data[0], "SCRM", 4)) // .S3M
-		return FORMAT_S3M;
-
-	if (DataLen >= 3 && !memcmp(&Data[0], "MTM", 3)) // MTM (?)
-		return FORMAT_MT;
-
-	if (DataLen >= 2 && (!memcmp(&Data[0], "if", 2) || !memcmp(Data, "JN", 2))) // .669 (poor)
-		return FORMAT_669;
-
-	if (DataLen >= 471+1 && Data[471] == 0x78) // .MOD (15-sample)
-		return FORMAT_MOD15;
-
-	return FORMAT_UNKNOWN;
+	return Format;
 }
 
 bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
@@ -321,10 +364,6 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 	if (m == NULL)
 		return false;
 
-	uint8_t Format = D_GetSongNameModuleType(Data, DataLen);
-	if (Format == FORMAT_UNKNOWN)
-		goto Error;
-
 	if (firstTimeLoading)
 	{
 		memset(&Song, 0, sizeof (Song));
@@ -334,6 +373,10 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 	{
 		Music_FreeSong();
 	}
+
+	uint8_t Format = D_GetSongNameModuleType(m);
+	if (Format == FORMAT_UNKNOWN)
+		goto Error;
 
 	Music_SetDefaultMIDIDataArea();
 
@@ -348,8 +391,11 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 
 		case FORMAT_PT:
 		case FORMAT_GENERIC_MOD:
-		case FORMAT_MOD15:
 			WasLoaded = D_LoadMOD(m, false);
+			break;
+
+		case FORMAT_MOD15:
+			WasLoaded = D_LoadMOD(m, true);
 			break;
 	}
 
