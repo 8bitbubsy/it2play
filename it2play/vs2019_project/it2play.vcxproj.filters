@@ -65,6 +65,9 @@
     <ClCompile Include="..\..\loaders\mod.c">
       <Filter>loaders</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\loaders\s3m.c">
+      <Filter>loaders</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\audiodrivers\winmm\winmm.h">
@@ -106,6 +109,9 @@
       <Filter>loaders\mmcmp</Filter>
     </ClInclude>
     <ClInclude Include="..\..\loaders\mod.h">
+      <Filter>loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\loaders\s3m.h">
       <Filter>loaders</Filter>
     </ClInclude>
   </ItemGroup>

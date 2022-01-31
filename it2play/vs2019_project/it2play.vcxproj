@@ -35,6 +35,7 @@
     <ClCompile Include="..\..\loaders\it.c" />
     <ClCompile Include="..\..\loaders\mmcmp\mmcmp.c" />
     <ClCompile Include="..\..\loaders\mod.c" />
+    <ClCompile Include="..\..\loaders\s3m.c" />
     <ClCompile Include="..\src\it2play.c" />
     <ClCompile Include="..\src\posix.c" />
   </ItemGroup>
@@ -55,6 +56,7 @@
     <ClInclude Include="..\..\loaders\it.h" />
     <ClInclude Include="..\..\loaders\mmcmp\mmcmp.h" />
     <ClInclude Include="..\..\loaders\mod.h" />
+    <ClInclude Include="..\..\loaders\s3m.h" />
     <ClInclude Include="..\src\posix.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
