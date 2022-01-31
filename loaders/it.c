@@ -29,8 +29,7 @@ bool D_LoadIT(MEMFILE *m)
 	** ===================================
 	*/
 
-	mseek(m, 4, SEEK_SET); // set to offset 4 (after "IMPM" magic)
-	if (!ReadBytes(m, Song.Header.SongName, 26)) return false;
+	mseek(m, 4+26, SEEK_SET); // set to offset 4 (after "IMPM" magic and song name)
 	if (!ReadBytes(m, &Song.Header.PHiligt, 2)) return false;
 	if (!ReadBytes(m, &Song.Header.OrdNum, 2)) return false;
 	if (!ReadBytes(m, &Song.Header.InsNum, 2)) return false;
@@ -130,7 +129,9 @@ bool D_LoadIT(MEMFILE *m)
 
 		uint32_t insOffset;
 		if (!ReadBytes(m, &insOffset, 4)) return false;
-		if (insOffset == 0) continue;
+
+		if (insOffset == 0)
+			continue;
 
 		mseek(m, insOffset, SEEK_SET);
 		if (meof(m)) return false;
@@ -260,7 +261,9 @@ bool D_LoadIT(MEMFILE *m)
 
 		uint32_t smpOffset;
 		if (!ReadBytes(m, &smpOffset, 4)) return false;
-		if (smpOffset == 0) continue;
+
+		if (smpOffset == 0)
+			continue;
 
 		mseek(m, smpOffset, SEEK_SET);
 		if (meof(m)) return false;
@@ -313,13 +316,13 @@ bool D_LoadIT(MEMFILE *m)
 		bool isDeltaEncoded = !!(s->Cvt & 4);
 
 		if (isDeltaEncoded && !isCompressed)
-			return false; // not supported
+			continue;
 
 		if (s->Length == 0 || !(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
-			return true; // safely skip this sample
+			continue; // safely skip this sample
 
 		if (s->Cvt & 0b11111010)
-			return true; // not supported
+			continue; // not supported
 
 		if (!Music_AllocateSample(i, s->Length * (1 + is16Bit))) return false;
 
@@ -374,6 +377,7 @@ bool D_LoadIT(MEMFILE *m)
 
 		uint32_t patOffset;
 		if (!ReadBytes(m, &patOffset, 4)) return false;
+
 		if (patOffset == 0)
 			continue;
 
@@ -384,7 +388,10 @@ bool D_LoadIT(MEMFILE *m)
 		uint16_t patLength;
 		if (!ReadBytes(m, &patLength, 2)) return false;
 		if (!ReadBytes(m, &pat->Rows, 2)) return false;
-		if (patLength == 0 || pat->Rows == 0) continue;
+
+		if (patLength == 0 || pat->Rows == 0)
+			continue;
+
 		if (!Music_AllocatePattern(i, patLength)) return false;
 
 		mseek(m, 4, SEEK_CUR); // skip unwanted stuff
