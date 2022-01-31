@@ -381,7 +381,12 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 	Song.Header.InitialSpeed = 6;
 	Song.Header.InitialTempo = 125;
 
-	// Separation of 64 (8bb: this should've been 128 for multi-ch MODs - it ruins pan commands!)
+	/* 8bb:
+	** IT2 sets a panning separation of 50% (0 = minimum, 128 = max) to soften the hard Amiga panning.
+	** However, Jeffrey probably forgot that this should only be applied to Amiga modules.
+	** What ends up happening is that panning commands in multi-channel modules will have 50% less
+	** separation too. This is not ideal, but I'll keep the behavior regardless.
+	*/
 	Song.Header.PanSep = 64;
 
 	if (MODNumberOfChannels <= 8)
@@ -390,7 +395,7 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 		for (int32_t i = 0; i < MAX_HOST_CHANNELS; i++)
 		{
 			if (i < MODNumberOfChannels)
-				Song.Header.ChnlPan[i] = ((i+1) & 2) ? 64 : 0;
+				Song.Header.ChnlPan[i] = ((i+1) & 2) ? 64 : 0; // 8bb: 100% right or 100% left
 			else
 				Song.Header.ChnlPan[i] = 32 | 128; // 8bb: center + disable channel
 		}
@@ -499,7 +504,8 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 
 	Song.Header.OrdNum = MODNumberOfOrders + 1;
 	Song.Header.PatNum = PatNum;
-	Song.Header.InsNum = Song.Header.SmpNum = MODNumberOfInstruments;
+	Song.Header.InsNum = 0;
+	Song.Header.SmpNum = MODNumberOfInstruments;
 
 	return true;
 }
