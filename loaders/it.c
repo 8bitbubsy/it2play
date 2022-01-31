@@ -355,7 +355,7 @@ bool D_LoadIT(MEMFILE *m)
 			}
 		}
 
-		if (is16Bit)
+		if (is16Bit) // 8bb: Music_AllocateSample() also set s->Length, divide by two if 16-bit
 			s->Length >>= 1;
 	}
 
