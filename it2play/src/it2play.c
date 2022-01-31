@@ -126,6 +126,9 @@ int main(int argc, char *argv[])
 	printf("\n");
 	printf("Name: %s\n", Song.Header.SongName);
 	printf("Orders in song: %d\n", (Song.Header.OrdNum <= 1) ? 0 : (Song.Header.OrdNum-1));
+	printf("Instruments in song: %d\n", Song.Header.InsNum);
+	printf("Samples in song: %d\n", Song.Header.SmpNum);
+	printf("\n");
 	printf("Stereo mode: %s\n", (Song.Header.Flags & ITF_STEREO) ? "Yes" : "No");
 	printf("Mixing volume: %d/128\n", Song.Header.MixVolume);
 	printf("Mixing frequency: %dHz\n", mixingFrequency);
