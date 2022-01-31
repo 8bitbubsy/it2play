@@ -23,6 +23,7 @@
 #include "it_d_rm.h"
 #include "loaders/it.h"
 #include "loaders/mod.h"
+#include "loaders/s3m.h"
 
 #define NO_NOTE 253
 
@@ -262,6 +263,19 @@ void EncodePattern(pattern_t *p, uint8_t Rows)
 	}
 }
 
+bool StorePattern(uint8_t NumRows, int32_t Pattern)
+{
+	uint16_t PackedLength;
+	if (!GetPatternLength(NumRows, &PackedLength))
+		return false;
+
+	if (!Music_AllocatePattern(Pattern, PackedLength))
+		return false;
+
+	EncodePattern(&Song.Pat[Pattern], NumRows);
+	return true;
+}
+
 static int8_t D_GetSongNameModuleType(MEMFILE *m)
 {
 	static uint8_t Header[1080+4];
@@ -387,6 +401,10 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 
 		case FORMAT_IT:
 			WasLoaded = D_LoadIT(m);
+			break;
+
+		case FORMAT_S3M:
+			WasLoaded = D_LoadS3M(m);
 			break;
 
 		case FORMAT_PT:

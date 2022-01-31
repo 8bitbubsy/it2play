@@ -47,6 +47,7 @@ void ClearEncodingInfo(void);
 void ClearPatternData(void);
 bool GetPatternLength(uint16_t Rows, uint16_t *LengthOut);
 void EncodePattern(pattern_t *p, uint8_t Rows);
+bool StorePattern(uint8_t NumRows, int32_t Pattern);
 bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen);
 bool Music_LoadFromFile(const char *Filename);
 void Music_FreeSong(void);

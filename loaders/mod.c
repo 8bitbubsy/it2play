@@ -41,307 +41,9 @@ static uint8_t PatData[MOD_ROWS*MAX_HOST_CHANNELS*4];
 static uint8_t MODNumberOfChannels, MODNumberOfOrders, MODNumberOfInstruments;
 static uint16_t MODOrderOffset, MODPatternOffset;
 
-static bool GetChannelCount(MEMFILE *m) // 8bb: added this
-{
-	uint8_t ID[4];
-
-	if (meof(m) || !ReadBytes(m, ID, 4))
-		return false;
-
-	MODNumberOfChannels = 4;
-	if (!memcmp(ID, "6CHN", 4))
-		MODNumberOfChannels = 6;
-	else if (!memcmp(ID, "8CHN", 4))
-		MODNumberOfChannels = 8;
-	else if (ID[0] >= '1' && ID[1] <= '9' && ID[1] >= '0' && ID[1] <= '9' && ID[2] == 'C' && ID[3] == 'H')
-		MODNumberOfChannels = ((ID[0] - '0') * 10) + (ID[1] - '0');
-
-	return true;
-}
-
-static void TranslateMODCommand(uint8_t *Dst)
-{
-	if (Dst[3] == 0 && Dst[4] == 0)
-		return;
-
-	switch (Dst[3])
-	{
-		default: break;
-
-		case 0x0: Dst[3] = 'J'-'@'; break;
-		case 0x1: Dst[3] = 'F'-'@'; break;
-		case 0x2: Dst[3] = 'E'-'@'; break;
-		case 0x3: Dst[3] = 'G'-'@'; break;
-		case 0x4: Dst[3] = 'H'-'@'; break;
-	
-		case 0x5:
-		{
-			if (Dst[4] != 0)
-				Dst[3] = 'L'-'@';
-			else
-				Dst[3] = 'G'-'@';
-		}
-		break;
-
-		case 0x6:
-		{
-			if (Dst[4] != 0)
-				Dst[3] = 'K'-'@';
-			else
-				Dst[3] = 'H'-'@';
-		}
-		break;
-
-		case 0x7: Dst[3] = 'R'-'@'; break;
-
-		case 0x8:
-		{
-			if (Dst[4] != 0xA4)
-			{
-				Dst[3] = 'X'-'@';
-			}
-			else
-			{
-				Dst[3] = 'S'-'@';
-				Dst[4] = 0x91;
-			}
-		}
-		break;
-
-		case 0x9: Dst[3] = 'O'-'@'; break;
-
-		case 0xA:
-		{
-			Dst[3] = 'D'-'@';
-
-			if ((Dst[4] & 0x0F) && (Dst[4] & 0xF0))
-				Dst[4] &= 0xF0;
-
-			if (Dst[4] == 0)
-				Dst[3] = 0;
-		}
-		break;
-
-		case 0xB: Dst[3] = 'B'-'@'; break;
-
-		case 0xC:
-		{
-			if (Dst[4] > 64)
-				Dst[4] = 64;
-
-			Dst[2] = Dst[4]; // 8bb: use volume column instead
-
-			Dst[3] = 0;
-			Dst[4] = 0;
-		}
-		break;
-
-		case 0xD:
-		{
-			Dst[3] = 'C'-'@';
-
-			// 8bb: IT2's broken (?) way of converting between decimal/hex
-			Dst[4] = (Dst[4] & 0x0F) + ((Dst[4] & 0xF0) >> 1) + ((Dst[4] & 0xF0) >> 3);
-		}
-		break;
-
-		case 0xE:
-		{
-			if (!(Dst[4] & 0xF0))
-			{
-				if (Dst[4] & 0x0F)
-				{
-					Dst[3] = 'S'-'@';
-				}
-				else
-				{
-					Dst[3] = 0;
-					Dst[4] = 0;
-				}
-			}
-			else
-			{
-				switch (Dst[4] >> 4)
-				{
-					case 0x1:
-					{
-						if (!(Dst[4] & 0x0F))
-						{
-							Dst[3] = 0;
-							Dst[4] = 0;
-						}
-						else
-						{
-							Dst[3] = 'F'-'@';
-							Dst[4] = 0xF0 | (Dst[4] & 0x0F);
-						}
-					}
-					break;
-
-					case 0x2:
-					{
-						if (!(Dst[4] & 0x0F))
-						{
-							Dst[3] = 0;
-							Dst[4] = 0;
-						}
-						else
-						{
-							Dst[3] = 'E'-'@';
-							Dst[4] = 0xF0 | (Dst[4] & 0x0F);
-						}
-					}
-					break;
-
-					case 0x3:
-					{
-						Dst[3] = 'S'-'@';
-						Dst[4] = 0x10 | (Dst[4] & 0x0F);
-					}
-					break;
-
-					case 0x4:
-					{
-						Dst[3] = 'S'-'@';
-						Dst[4] = 0x30 | (Dst[4] & 0x0F);
-					}
-					break;
-
-					case 0x5:
-					{
-						Dst[3] = 'S'-'@';
-						Dst[4] = 0x20 | (Dst[4] & 0x0F);
-					}
-					break;
-
-					case 0x6:
-					{
-						Dst[3] = 'S'-'@';
-						Dst[4] = 0xB0 | (Dst[4] & 0x0F);
-					}
-					break;
-
-					case 0x7:
-					{
-						Dst[3] = 'S'-'@';
-						Dst[4] = 0x40 | (Dst[4] & 0x0F);
-					}
-					break;
-
-					case 0x8:
-					{
-						Dst[3] = 'S'-'@';
-					}
-					break;
-
-					case 0x9:
-					{
-						if (!(Dst[4] & 0x0F))
-						{
-							Dst[3] = 0;
-							Dst[4] = 0;
-						}
-						else
-						{
-							Dst[3] = 'Q'-'@';
-							Dst[4] &= 0x0F;
-						}
-					}
-					break;
-
-					case 0xA:
-					{
-						if (!(Dst[4] & 0x0F))
-						{
-							Dst[3] = 0;
-							Dst[4] = 0;
-						}
-						else
-						{
-							Dst[3] = 'D'-'@';
-							Dst[4] <<= 4;
-							Dst[4] |= 0x0F;
-						}
-					}
-					break;
-
-					case 0xB:
-					{
-						if (!(Dst[4] & 0x0F))
-						{
-							Dst[3] = 0;
-							Dst[4] = 0;
-						}
-						else
-						{
-							Dst[3] = 'D'-'@';
-							Dst[4] &= 0x0F;
-							Dst[4] |= 0xF0;
-						}
-					}
-					break;
-
-					default: Dst[3] = 'S'-'@'; break;
-				}
-			}
-		}
-		break;
-
-		case 0xF:
-		{
-			if (Dst[4] > 0x20)
-				Dst[3] = 'T'-'@';
-			else
-				Dst[3] = 'A'-'@';
-		}
-		break;
-	}
-}
-
-static bool TranslateMODPattern(uint8_t *Src, int32_t Pattern, uint8_t NumChannels)
-{
-	ClearPatternData();
-
-	uint8_t *OrigDst = PatternDataArea;
-	for (int32_t i = 0; i < MOD_ROWS; i++)
-	{
-		uint8_t *Dst = OrigDst;
-		for (int32_t j = 0; j < NumChannels; j++, Src += 4, Dst += 5)
-		{
-			uint16_t Period = ((Src[0] & 0x0F) << 8) | Src[1];
-			if (Period > 0)
-			{
-				for (int32_t k = 0; k < 6*12; k++)
-				{
-					if (Period >= MODPeriodTable[k])
-					{
-						Dst[0] = (3 * 12) + (uint8_t)k;
-						break;
-					}
-				}
-			}
-
-			Dst[1] = (Src[0] & 0xF0) | (Src[2] >> 4); // 8bb: sample
-			// 8bb: skip volume column
-			Dst[3] = Src[2] & 0x0F; // 8bb: effect
-			Dst[4] = Src[3]; // 8bb: effect parameter
-
-			TranslateMODCommand(Dst);
-		}
-
-		OrigDst += MAX_HOST_CHANNELS * 5;
-	}
-
-	uint16_t PackedLength;
-	if (!GetPatternLength(MOD_ROWS, &PackedLength))
-		return false;
-
-	if (!Music_AllocatePattern(Pattern, PackedLength))
-		return false;
-
-	EncodePattern(&Song.Pat[Pattern], MOD_ROWS);
-	return true;
-}
+static bool GetChannelCount(MEMFILE *m); // 8bb: added this
+static void TranslateMODCommand(uint8_t *Dst);
+static bool TranslateMODPattern(uint8_t *Src, int32_t Pattern, uint8_t NumChannels);
 
 bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 {
@@ -503,4 +205,296 @@ bool D_LoadMOD(MEMFILE *m, bool Format15Samples)
 	Song.Header.SmpNum = MODNumberOfInstruments;
 
 	return true;
+}
+
+static bool GetChannelCount(MEMFILE *m) // 8bb: added this
+{
+	uint8_t ID[4];
+
+	if (meof(m) || !ReadBytes(m, ID, 4))
+		return false;
+
+	MODNumberOfChannels = 4;
+	if (!memcmp(ID, "6CHN", 4))
+		MODNumberOfChannels = 6;
+	else if (!memcmp(ID, "8CHN", 4))
+		MODNumberOfChannels = 8;
+	else if (ID[0] >= '1' && ID[1] <= '9' && ID[1] >= '0' && ID[1] <= '9' && ID[2] == 'C' && ID[3] == 'H')
+		MODNumberOfChannels = ((ID[0] - '0') * 10) + (ID[1] - '0');
+
+	return true;
+}
+
+static void TranslateMODCommand(uint8_t *Dst)
+{
+	if (Dst[3] == 0 && Dst[4] == 0)
+		return;
+
+	switch (Dst[3])
+	{
+		default: break;
+
+		case 0x0: Dst[3] = 'J'-'@'; break;
+		case 0x1: Dst[3] = 'F'-'@'; break;
+		case 0x2: Dst[3] = 'E'-'@'; break;
+		case 0x3: Dst[3] = 'G'-'@'; break;
+		case 0x4: Dst[3] = 'H'-'@'; break;
+
+		case 0x5:
+		{
+			if (Dst[4] != 0)
+				Dst[3] = 'L'-'@';
+			else
+				Dst[3] = 'G'-'@';
+		}
+		break;
+
+		case 0x6:
+		{
+			if (Dst[4] != 0)
+				Dst[3] = 'K'-'@';
+			else
+				Dst[3] = 'H'-'@';
+		}
+		break;
+
+		case 0x7: Dst[3] = 'R'-'@'; break;
+
+		case 0x8:
+		{
+			if (Dst[4] != 0xA4)
+			{
+				Dst[3] = 'X'-'@';
+			}
+			else
+			{
+				Dst[3] = 'S'-'@';
+				Dst[4] = 0x91;
+			}
+		}
+		break;
+
+		case 0x9: Dst[3] = 'O'-'@'; break;
+
+		case 0xA:
+		{
+			Dst[3] = 'D'-'@';
+
+			if ((Dst[4] & 0x0F) && (Dst[4] & 0xF0))
+				Dst[4] &= 0xF0;
+
+			if (Dst[4] == 0)
+				Dst[3] = 0;
+		}
+		break;
+
+		case 0xB: Dst[3] = 'B'-'@'; break;
+
+		case 0xC:
+		{
+			if (Dst[4] > 64)
+				Dst[4] = 64;
+
+			Dst[2] = Dst[4]; // 8bb: use volume column instead
+
+			Dst[3] = 0;
+			Dst[4] = 0;
+		}
+		break;
+
+		case 0xD:
+		{
+			Dst[3] = 'C'-'@';
+
+			// 8bb: IT2's broken (?) way of converting between decimal/hex
+			Dst[4] = (Dst[4] & 0x0F) + ((Dst[4] & 0xF0) >> 1) + ((Dst[4] & 0xF0) >> 3);
+		}
+		break;
+
+		case 0xE:
+		{
+			if (!(Dst[4] & 0xF0))
+			{
+				if (Dst[4] & 0x0F)
+				{
+					Dst[3] = 'S'-'@';
+				}
+				else
+				{
+					Dst[3] = 0;
+					Dst[4] = 0;
+				}
+			}
+			else
+			{
+				switch (Dst[4] >> 4)
+				{
+				case 0x1:
+				{
+					if (!(Dst[4] & 0x0F))
+					{
+						Dst[3] = 0;
+						Dst[4] = 0;
+					}
+					else
+					{
+						Dst[3] = 'F'-'@';
+						Dst[4] = 0xF0 | (Dst[4] & 0x0F);
+					}
+				}
+				break;
+
+				case 0x2:
+				{
+					if (!(Dst[4] & 0x0F))
+					{
+						Dst[3] = 0;
+						Dst[4] = 0;
+					}
+					else
+					{
+						Dst[3] = 'E'-'@';
+						Dst[4] = 0xF0 | (Dst[4] & 0x0F);
+					}
+				}
+				break;
+
+				case 0x3:
+				{
+					Dst[3] = 'S'-'@';
+					Dst[4] = 0x10 | (Dst[4] & 0x0F);
+				}
+				break;
+
+				case 0x4:
+				{
+					Dst[3] = 'S'-'@';
+					Dst[4] = 0x30 | (Dst[4] & 0x0F);
+				}
+				break;
+
+				case 0x5:
+				{
+					Dst[3] = 'S'-'@';
+					Dst[4] = 0x20 | (Dst[4] & 0x0F);
+				}
+				break;
+
+				case 0x6:
+				{
+					Dst[3] = 'S'-'@';
+					Dst[4] = 0xB0 | (Dst[4] & 0x0F);
+				}
+				break;
+
+				case 0x7:
+				{
+					Dst[3] = 'S'-'@';
+					Dst[4] = 0x40 | (Dst[4] & 0x0F);
+				}
+				break;
+
+				case 0x8:
+				{
+					Dst[3] = 'S'-'@';
+				}
+				break;
+
+				case 0x9:
+				{
+					if (!(Dst[4] & 0x0F))
+					{
+						Dst[3] = 0;
+						Dst[4] = 0;
+					}
+					else
+					{
+						Dst[3] = 'Q'-'@';
+						Dst[4] &= 0x0F;
+					}
+				}
+				break;
+
+				case 0xA:
+				{
+					if (!(Dst[4] & 0x0F))
+					{
+						Dst[3] = 0;
+						Dst[4] = 0;
+					}
+					else
+					{
+						Dst[3] = 'D'-'@';
+						Dst[4] <<= 4;
+						Dst[4] |= 0x0F;
+					}
+				}
+				break;
+
+				case 0xB:
+				{
+					if (!(Dst[4] & 0x0F))
+					{
+						Dst[3] = 0;
+						Dst[4] = 0;
+					}
+					else
+					{
+						Dst[3] = 'D'-'@';
+						Dst[4] &= 0x0F;
+						Dst[4] |= 0xF0;
+					}
+				}
+				break;
+
+				default: Dst[3] = 'S'-'@'; break;
+				}
+			}
+		}
+		break;
+
+		case 0xF:
+		{
+			if (Dst[4] > 0x20)
+				Dst[3] = 'T'-'@';
+			else
+				Dst[3] = 'A'-'@';
+		}
+		break;
+	}
+}
+
+static bool TranslateMODPattern(uint8_t *Src, int32_t Pattern, uint8_t NumChannels)
+{
+	ClearPatternData();
+
+	uint8_t *OrigDst = PatternDataArea;
+	for (int32_t i = 0; i < MOD_ROWS; i++, OrigDst += MAX_HOST_CHANNELS * 5)
+	{
+		uint8_t *Dst = OrigDst;
+		for (int32_t j = 0; j < NumChannels; j++, Src += 4, Dst += 5)
+		{
+			uint16_t Period = ((Src[0] & 0x0F) << 8) | Src[1];
+			if (Period > 0)
+			{
+				for (int32_t k = 0; k < 6*12; k++)
+				{
+					if (Period >= MODPeriodTable[k])
+					{
+						Dst[0] = (3 * 12) + (uint8_t)k;
+						break;
+					}
+				}
+			}
+
+			Dst[1] = (Src[0] & 0xF0) | (Src[2] >> 4); // 8bb: sample
+			// 8bb: skip volume column
+			Dst[3] = Src[2] & 0x0F; // 8bb: effect
+			Dst[4] = Src[3]; // 8bb: effect parameter
+
+			TranslateMODCommand(Dst);
+		}
+	}
+
+	return StorePattern(MOD_ROWS, Pattern);
 }
