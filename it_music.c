@@ -37,9 +37,7 @@ bool WAVRender_Flag = false;
 static bool FirstTimeInit = true;
 static uint8_t InterpretState, InterpretType; // 8bb: for MIDISendFilter()
 static uint16_t Seed1 = 0x1234, Seed2 = 0x5678;
-#ifdef USEFPUCODE
-static double *dLinearSlideUpTable, *dLinearSlideDownTable;
-#endif
+
 static char MIDIDataArea[(9+16+128)*32];
 
 /* 8bb: These have been changed to be easier to understand,
@@ -1247,19 +1245,14 @@ void PitchSlideUpLinear(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 	assert(hc != NULL);
 	assert(SlideValue >= -1024 && SlideValue <= 1024);
 
-#ifdef USEFPUCODE // 8bb: IT2.15
-
-	// 8bb: added pre-calced exp2 LUTs
-	double *dExpLUT = (double *)dLinearSlideUpTable;
-	if (SlideValue < 0)
-	{
-		SlideValue = -SlideValue;
-		dExpLUT = (double *)dLinearSlideDownTable;
-	}
+#ifdef USEFPUCODE // 8bb: IT2.15 (registered)
 
 	sc->Flags |= SF_FREQ_CHANGE; // recalculate pitch!
 
-	double dNewFreq = sc->Frequency * dExpLUT[SlideValue];
+	// 8bb: yes, IT2 really uses 24-bit (float) precision here
+	const float fMultiplier = powf(2.0f, SlideValue * (1.0f / 768.0f));
+
+	double dNewFreq = sc->Frequency * (double)fMultiplier;
 	if (dNewFreq >= INT32_MAX)
 	{
 		sc->Flags |= SF_NOTE_STOP; // Turn off channel
@@ -1267,9 +1260,9 @@ void PitchSlideUpLinear(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 		return;
 	}
 
-	sc->Frequency = (int32_t)dNewFreq; // 8bb: Do not round here! Truncate.
+	sc->Frequency = (int32_t)nearbyint(dNewFreq); // 8bb: rounded ( nearbyint() is needed over round() )
 
-#else // 8bb: IT2.14 and older
+#else // 8bb: IT2.14 and older (what the vast majority of IT2 users had)
 
 	sc->Flags |= SF_FREQ_CHANGE; // recalculate pitch!
 
@@ -2004,113 +1997,24 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 	if (!DriverInitSound(mixingFrequency))
 		return false;
 
-#ifdef USEFPUCODE
-	// 8bb: pre-calculate pitch-slide exp2() values (IT2 doesn't do this)
-
-	dLinearSlideUpTable = (double *)malloc((1024+1) * sizeof (double));
-	dLinearSlideDownTable = (double *)malloc((1024+1) * sizeof (double));
-
-	if (dLinearSlideUpTable == NULL || dLinearSlideDownTable == NULL)
-		goto Error;
-
-	for (int32_t i = 0; i <= 1024; i++)
-	{
-		dLinearSlideUpTable[i]   = exp2( i / 768.0);
-		dLinearSlideDownTable[i] = exp2(-i / 768.0);
-	}
-#endif
-
 	// 8bb: pre-calc filter coeff tables if the selected driver has filters
 	if (Driver.Flags & DF_HAS_RESONANCE_FILTER)
 	{
-		Driver.fQualityFactorTable = (float *)malloc(128 * sizeof (float));
-		Driver.fFilterCoeffTable = (float *)malloc(((127*255)+1) * sizeof (float));
-
-		if (Driver.fQualityFactorTable == NULL || Driver.fFilterCoeffTable == NULL)
-			goto Error;
-
 		// 8bb: pre-calculate QualityFactorTable (bit-accurate)
 		for (int16_t i = 0; i < 128; i++)
-			Driver.fQualityFactorTable[i] = (float)pow(10.0, (-i * 24.0) / (128.0 * 20.0));
+			Driver.QualityFactorTable[i] = (float)pow(10.0, (-i * 24.0) / (128.0 * 20.0));
 
-		// 8bb: pre-calculate filter coeff table (IT2 doesn't do this)
-
-		const float FreqParameterMultiplier = -0.000162760407f; // -1/(24*256) (8bb: w/ rounding error!)
-		const float FreqMultiplier = 0.00121666200f * (float)mixingFrequency; // 1/(2*PI*110.0*2^0.25) * mixingFrequency
-
-		for (int16_t i = 0; i <= 127*255; i++)
-			Driver.fFilterCoeffTable[i] = powf(2.0f, (float)i * FreqParameterMultiplier) * FreqMultiplier;
+		Driver.FreqParameterMultiplier = -0.000162760407f; // -1/(24*256) (8bb: w/ rounding error!)
+		Driver.FreqMultiplier = 0.00121666200f * (float)mixingFrequency; // 1/(2*PI*110.0*2^0.25) * mixingFrequency
 	}
 
 	return true;
-
-Error:
-
-#ifdef USEFPUCODE
-	if (dLinearSlideUpTable != NULL)
-	{
-		free(dLinearSlideUpTable);
-		dLinearSlideUpTable = NULL;
-	}
-
-	if (dLinearSlideDownTable != NULL)
-	{
-		free(dLinearSlideDownTable);
-		dLinearSlideDownTable = NULL;
-	}
-#endif
-
-	if (Driver.Flags & DF_HAS_RESONANCE_FILTER)
-	{
-		if (Driver.fQualityFactorTable != NULL)
-		{
-			free(Driver.fQualityFactorTable);
-			Driver.fQualityFactorTable = NULL;
-		}
-
-		if (Driver.fFilterCoeffTable != NULL)
-		{
-			free(Driver.fFilterCoeffTable);
-			Driver.fFilterCoeffTable = NULL;
-		}
-	}
-
-	return false;
 }
 
 void Music_Close(void) // 8bb: added this
 {
 	closeMixer();
 	DriverUninitSound();
-
-#ifdef USEFPUCODE
-	if (dLinearSlideUpTable != NULL)
-	{
-		free(dLinearSlideUpTable);
-		dLinearSlideUpTable = NULL;
-	}
-
-	if (dLinearSlideDownTable != NULL)
-	{
-		free(dLinearSlideDownTable);
-		dLinearSlideDownTable = NULL;
-	}
-#endif
-
-	if (Driver.Flags & DF_HAS_RESONANCE_FILTER)
-	{
-		if (Driver.fQualityFactorTable != NULL)
-		{
-			free(Driver.fQualityFactorTable);
-			Driver.fQualityFactorTable = NULL;
-		}
-
-		if (Driver.fFilterCoeffTable != NULL)
-		{
-			free(Driver.fFilterCoeffTable);
-			Driver.fFilterCoeffTable = NULL;
-		}
-	}
 }
 
 void Music_InitTempo(void)
@@ -2124,14 +2028,7 @@ void Music_Stop(void)
 
 	lockMixer();
 
-	slaveChn_t *sc = sChn;
-	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
-	{
-		if ((sc->Flags & SF_CHAN_ON) && sc->Smp == 100)
-			MIDITranslate(sc->HCOffst, sc, MIDICOMMAND_STOPNOTE);
-	}
-
-	MIDITranslate(sc->HCOffst, sc, MIDICOMMAND_STOP);
+	MIDITranslate(NULL, sChn, MIDICOMMAND_STOP);
 
 	Song.DecodeExpectedPattern = 0xFFFE;
 	Song.DecodeExpectedRow = 0xFFFE;
@@ -2155,7 +2052,7 @@ void Music_Stop(void)
 		hc->CV = Song.Header.ChnlVol[i];
 	}
 	
-	sc = sChn;
+	slaveChn_t *sc = sChn;
 	for (uint32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
 		sc->Flags = SF_NOTE_STOP;
 
@@ -2261,12 +2158,7 @@ void Music_PrepareWAVRender(void)  // 8bb: added this
 	Song.Playing = false; // 8bb: needed so that the audio output (sound card) doesn't mess with the WAV render
 	Music_Stop();
 
-	// 8bb: reset filters
-	for (int32_t i = 0; i < 64; i++)
-	{
-		Driver.FilterParameters[   i] = 127; // 8bb: cutoff
-		Driver.FilterParameters[64+i] = 0;   // 8bb: resonance (Q)
-	}
+	MIDITranslate(NULL, sChn, MIDICOMMAND_START); // 8bb: this will reset channel filters
 
 	Song.CurrentOrder = 0;
 	Song.ProcessOrder = 0xFFFF;
@@ -2275,6 +2167,9 @@ void Music_PrepareWAVRender(void)  // 8bb: added this
 	// 8bb: reset seed (IT2 only does this at tracker startup, but let's do it here)
 	Seed1 = 0x1234;
 	Seed2 = 0x5678;
+
+	InterpretState = InterpretType = 0; // 8bb: clear MIDI filter interpretor state
+	DriverResetMixer();
 }
 
 void Music_ReleaseSample(uint32_t sample)
@@ -2452,13 +2347,13 @@ bool Music_RenderToWAV(const char *filenameOut)
 	Music_PrepareWAVRender();
 	while (WAVRender_Flag)
 	{
-		Update();	
+		Update();
 		if (Song.StopSong)
 		{
 			Song.StopSong = false;
 			break;
 		}
-		
+
 		DriverMixSamples();
 		DriverPostMix(AudioBuffer, Driver.BytesToMix);
 

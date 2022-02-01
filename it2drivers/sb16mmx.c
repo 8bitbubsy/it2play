@@ -138,8 +138,8 @@ void SB16MMX_MixSamples(void)
 						if (FilterFreqValue != 127*255 || FilterQ != 0)
 						{
 							assert(FilterFreqValue <= 127*255 && FilterQ <= 127);
-							const float r = Driver.fFilterCoeffTable[FilterFreqValue]; // 8bb: added this pre-calced float table
-							const float p = Driver.fQualityFactorTable[FilterQ];
+							const float r = powf(2.0f, (float)FilterFreqValue * Driver.FreqParameterMultiplier) * Driver.FreqMultiplier;
+							const float p = Driver.QualityFactorTable[FilterQ];
 
 							/* 8bb:
 							** The code is done like this to be more accurate on x86/x86_64, even if the FPU is used instead of SIMD.

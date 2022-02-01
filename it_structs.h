@@ -219,7 +219,7 @@ typedef struct
 	uint8_t Type, Flags, FilterParameters[128];
 	int32_t BytesToMix, Delta;
 	uint32_t MixMode, MixSpeed;
-	float *fQualityFactorTable, *fFilterCoeffTable;
+	float QualityFactorTable[128], FreqParameterMultiplier, FreqMultiplier;
 } driver_t;
 
 typedef struct song_t
