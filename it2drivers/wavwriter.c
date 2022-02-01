@@ -1,5 +1,5 @@
 /*
-** ---- "WAV writer" IT2.15 driver ----
+** ---- "WAV writer" (IT2.15 registered) driver ----
 */
 
 #include <assert.h>

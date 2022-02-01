@@ -1,5 +1,5 @@
 /* 8bb:
-** ---- "WAV writer" IT2.14 driver (not the same as the one found in 2.15 code repo) ----
+** ---- "WAV writer" (IT2.15 registered) driver ----
 */
 
 #include <stdint.h>
@@ -233,16 +233,14 @@ void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 	int32_t sample;
 	float f1, f2, fSample;
 
-	for (int32_t i = 0; i < (NumSamples & 3); i++)
+	if (NumSamples & 1)
 	{
 		Mix32Stereo8Bit_M
 	}
 
-	NumSamples >>= 2;
+	NumSamples >>= 1;
 	for (int32_t i = 0; i < NumSamples; i++)
 	{
-		Mix32Stereo8Bit_M
-		Mix32Stereo8Bit_M
 		Mix32Stereo8Bit_M
 		Mix32Stereo8Bit_M
 	}
@@ -258,16 +256,14 @@ void Mix32Stereo16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 	int32_t sample;
 	float f1, f2, fSample;
 
-	for (int32_t i = 0; i < (NumSamples & 3); i++)
+	if (NumSamples & 1)
 	{
 		Mix32Stereo16Bit_M
 	}
 
-	NumSamples >>= 2;
+	NumSamples >>= 1;
 	for (int32_t i = 0; i < NumSamples; i++)
 	{
-		Mix32Stereo16Bit_M
-		Mix32Stereo16Bit_M
 		Mix32Stereo16Bit_M
 		Mix32Stereo16Bit_M
 	}
@@ -283,16 +279,14 @@ void Mix32Surround8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 	int32_t sample;
 	float f1, f2, fSample;
 
-	for (int32_t i = 0; i < (NumSamples & 3); i++)
+	if (NumSamples & 1)
 	{
 		Mix32Surround8Bit_M
 	}
 
-	NumSamples >>= 2;
+	NumSamples >>= 1;
 	for (int32_t i = 0; i < NumSamples; i++)
 	{
-		Mix32Surround8Bit_M
-		Mix32Surround8Bit_M
 		Mix32Surround8Bit_M
 		Mix32Surround8Bit_M
 	}
@@ -310,16 +304,14 @@ void Mix32Surround16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 	int32_t sample;
 	float f1, f2, fSample;
 
-	for (int32_t i = 0; i < (NumSamples & 3); i++)
+	if (NumSamples & 1)
 	{
 		Mix32Surround16Bit_M
 	}
 
-	NumSamples >>= 2;
+	NumSamples >>= 1;
 	for (int32_t i = 0; i < NumSamples; i++)
 	{
-		Mix32Surround16Bit_M
-		Mix32Surround16Bit_M
 		Mix32Surround16Bit_M
 		Mix32Surround16Bit_M
 	}
