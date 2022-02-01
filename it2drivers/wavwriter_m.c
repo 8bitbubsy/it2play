@@ -1,4 +1,4 @@
-/* 8bb:
+/*
 ** ---- "WAV writer" (IT2.15 registered) driver ----
 */
 
