@@ -50,44 +50,22 @@ void SB16_MixSamples(void)
 			sc->Delta = (Quotient << MIX_FRAC_BITS) | (uint16_t)((Remainder << MIX_FRAC_BITS) / Driver.MixSpeed);
 		}
 
-		if (sc->Flags & SF_NEW_NOTE) // 8bb: This is not really needed. We have no volume ramp in the SB16 driver!
-			sc->OldLeftVolume = sc->OldRightVolume = 0; // Current Volume = 0 for volume sliding.
-
 		if (sc->Flags & (SF_RECALC_FINALVOL | SF_LOOP_CHANGED | SF_PAN_CHANGED))
 		{
 			if (!(sc->Flags & SF_CHN_MUTED))
 			{
-				if (Driver.MixMode < 2) // 8bb: 16-bit mixer (aka. "12 Bit")
+				if (!(Song.Header.Flags & ITF_STEREO)) // 8bb: mono?
 				{
-					if (!(Song.Header.Flags & ITF_STEREO)) // 8bb: mono?
-					{
-						sc->LeftVolume = sc->RightVolume = sc->FV >> 1; // 8bb: 0..64
-					}
-					else if (sc->FPP == PAN_SURROUND)
-					{
-						sc->LeftVolume = sc->RightVolume = sc->FV >> 2; // 8bb: 0..32
-					}
-					else // 8bb: normal (panned)
-					{
-						sc->LeftVolume  = (((64-sc->FPP) * sc->FV) + 64) >> 7; // 8bb: 0..64
-						sc->RightVolume = ((    sc->FPP  * sc->FV) + 64) >> 7;
-					}
+					sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 8; // 8bb: 0..16384
 				}
-				else // 8bb: 32-bit mixer
+				else if (sc->FPP == PAN_SURROUND)
 				{
-					if (!(Song.Header.Flags & ITF_STEREO)) // 8bb: mono?
-					{
-						sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 8; // 8bb: 0..16384
-					}
-					else if (sc->FPP == PAN_SURROUND)
-					{
-						sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 9; // 8bb: 0..8192
-					}
-					else // 8bb: normal (panned)
-					{
-						sc->LeftVolume  = ((64-sc->FPP) * MixVolume * sc->vol16Bit) >> 14; // 8bb: 0..16384
-						sc->RightVolume = (    sc->FPP  * MixVolume * sc->vol16Bit) >> 14;
-					}
+					sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 9; // 8bb: 0..8192
+				}
+				else // 8bb: normal (panned)
+				{
+					sc->LeftVolume  = ((64-sc->FPP) * MixVolume * sc->vol16Bit) >> 14; // 8bb: 0..16384
+					sc->RightVolume = (    sc->FPP  * MixVolume * sc->vol16Bit) >> 14;
 				}
 			}
 		}
@@ -123,12 +101,6 @@ void SB16_MixSamples(void)
 		const bool Sample16it = !!(sc->Bit & SMPF_16BIT);
 		const mixFunc Mix = SB16_MixFunctionTables[(Driver.MixMode << 2) + (Surround << 1) + Sample16it];
 		int32_t *MixBufferPtr = MixBuffer;
-
-		if (Driver.MixMode < 2) // 8bb: 16-bit mixers used?
-		{
-			LeftVolume16 = (uint16_t)sc->LeftVolume << 8;
-			RightVolume16 = (uint16_t)sc->RightVolume << 8;
-		}
 
 		if ((int32_t)LoopLength > 0)
 		{
@@ -268,20 +240,6 @@ void SB16_SetTempo(uint8_t Tempo)
 void SB16_SetMixVolume(uint8_t vol)
 {
 	MixVolume = vol;
-
-	if (Driver.MixMode <= 1 && MixVolumeLUT != NULL) // 8bb: 16-bit mixers used? Calculate mix LUT.
-	{
-		for (uint16_t i = 0; i < MIXTABLESIZE; i++)
-		{
-			const int16_t Value = i;
-
-			int8_t WaveValue = (Value & 0xFF);
-			int8_t Volume = Value >> 8;
-
-			MixVolumeLUT[i] = ((Volume * WaveValue * (int16_t)MixVolume) + 64) >> 7;
-		}
-	}
-
 	RecalculateAllVolumes();
 }
 
@@ -406,21 +364,10 @@ bool SB16_InitSound(int32_t mixingFrequency)
 	Driver.Type = DRIVER_SB16;
 
 	/*
-	** MixMode 0 = "16 Bit Non-interpolated"
-	** MixMode 1 = "16 Bit Interpolated"
-	** MixMode 2 = "32 Bit Non-interpolated"
-	** MixMode 3 = "32 Bit Interpolated"
+	** MixMode 0 = "32 Bit Non-interpolated"
+	** MixMode 1 = "32 Bit Interpolated"
 	*/
-	Driver.MixMode = 3; // 8bb: "32 Bit Interpolated"
-
-	// 8bb: The 16-bit mixers uses a volume LUT. It's calculated in SB16_SetMixVolume().
-	if (Driver.MixMode <= 1)
-	{
-		MixVolumeLUT = (int16_t *)malloc(MIXTABLESIZE * sizeof (int16_t));
-		if (MixVolumeLUT == NULL)
-			return false;
-	}
-
+	Driver.MixMode = 1; // 8bb: "32 Bit Interpolated"
 	return true;
 }
 
@@ -430,11 +377,5 @@ void SB16_UninitSound(void)
 	{
 		free(MixBuffer);
 		MixBuffer = NULL;
-	}
-
-	if (MixVolumeLUT != NULL)
-	{
-		free(MixVolumeLUT);
-		MixVolumeLUT = NULL;
 	}
 }
