@@ -125,7 +125,12 @@ static inline int32_t ApplyCompressorAndQuantize(float fSample)
 	}
 	else
 	{
-		SampleValue = (int32_t)roundf(fSample);
+		if (fSample < 0.0)
+			fSample -= 0.5f;
+		else
+			fSample += 0.5f;
+
+		SampleValue = (int32_t)fSample;
 	}
 
 	return SampleValue;
