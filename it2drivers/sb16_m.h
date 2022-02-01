@@ -7,7 +7,7 @@
 
 typedef void (*mixFunc)(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 
-extern int16_t MixSegment[MIXTABLESIZE];
+extern int16_t *MixVolumeLUT;
 extern uint32_t LeftVolume16, RightVolume16;
 
 extern const mixFunc SB16_MixFunctionTables[16];

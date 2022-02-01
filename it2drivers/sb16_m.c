@@ -49,57 +49,57 @@
 
 #define M12Mix8_M \
 	sample = *smp; \
-	MixBufPtr16[0] -= MixSegment[LeftVolume16 + (uint8_t)sample]; \
-	MixBufPtr16[2] -= MixSegment[RightVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[0] -= MixVolumeLUT[LeftVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[2] -= MixVolumeLUT[RightVolume16 + (uint8_t)sample]; \
 	MixBufPtr16 += 4; \
 	UpdatePos
 
 #define M12Mix16_M \
 	sample = (*smp) >> 8; \
-	MixBufPtr16[0] -= MixSegment[LeftVolume16 + (uint8_t)sample]; \
-	MixBufPtr16[2] -= MixSegment[RightVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[0] -= MixVolumeLUT[LeftVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[2] -= MixVolumeLUT[RightVolume16 + (uint8_t)sample]; \
 	MixBufPtr16 += 4; \
 	UpdatePos
 
 #define M12Mix8S_M \
 	sample = *smp; \
-	MixBufPtr16[0] -= MixSegment[LeftVolume16 + (uint8_t)sample]; \
-	MixBufPtr16[2] += MixSegment[RightVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[0] -= MixVolumeLUT[LeftVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[2] += MixVolumeLUT[RightVolume16 + (uint8_t)sample]; \
 	MixBufPtr16 += 4; \
 	UpdatePos
 
 #define M12Mix16S_M \
 	sample = (*smp) >> 8; \
-	MixBufPtr16[0] -= MixSegment[LeftVolume16 + (uint8_t)sample]; \
-	MixBufPtr16[2] += MixSegment[RightVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[0] -= MixVolumeLUT[LeftVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[2] += MixVolumeLUT[RightVolume16 + (uint8_t)sample]; \
 	MixBufPtr16 += 4; \
 	UpdatePos
 
 #define M12Mix8I_M \
 	Get32BitI8Waveform \
-	MixBufPtr16[0] -= MixSegment[LeftVolume16 + (uint8_t)sample]; \
-	MixBufPtr16[2] -= MixSegment[RightVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[0] -= MixVolumeLUT[LeftVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[2] -= MixVolumeLUT[RightVolume16 + (uint8_t)sample]; \
 	MixBufPtr16 += 4; \
 	UpdatePos
 
 #define M12Mix16I_M \
 	Get32BitI16Waveform \
-	MixBufPtr16[0] -= MixSegment[LeftVolume16 + (uint8_t)sample]; \
-	MixBufPtr16[2] -= MixSegment[RightVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[0] -= MixVolumeLUT[LeftVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[2] -= MixVolumeLUT[RightVolume16 + (uint8_t)sample]; \
 	MixBufPtr16 += 4; \
 	UpdatePos
 
 #define M12Mix8IS_M \
 	Get32BitI8Waveform \
-	MixBufPtr16[0] -= MixSegment[LeftVolume16 + (uint8_t)sample]; \
-	MixBufPtr16[2] += MixSegment[RightVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[0] -= MixVolumeLUT[LeftVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[2] += MixVolumeLUT[RightVolume16 + (uint8_t)sample]; \
 	MixBufPtr16 += 4; \
 	UpdatePos
 
 #define M12Mix16IS_M \
 	Get32BitI16Waveform \
-	MixBufPtr16[0] -= MixSegment[LeftVolume16 + (uint8_t)sample]; \
-	MixBufPtr16[2] += MixSegment[RightVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[0] -= MixVolumeLUT[LeftVolume16 + (uint8_t)sample]; \
+	MixBufPtr16[2] += MixVolumeLUT[RightVolume16 + (uint8_t)sample]; \
 	MixBufPtr16 += 4; \
 	UpdatePos
 
@@ -172,7 +172,7 @@ const mixFunc SB16_MixFunctionTables[16] =
 };
 
 // 8bb: globalized
-int16_t MixSegment[MIXTABLESIZE]; // 8bb: volume LUT for 16-bit mix mode
+int16_t *MixVolumeLUT = NULL; // 8bb: volume LUT for 16-bit mix mode
 uint32_t LeftVolume16, RightVolume16;
 // ------------------
 

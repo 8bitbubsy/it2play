@@ -269,15 +269,16 @@ void SB16_SetMixVolume(uint8_t vol)
 {
 	MixVolume = vol;
 
-	if (Driver.MixMode <= 2) // 8bb: 16-bit mixers used? Calculate mixing LUT.
+	if (Driver.MixMode <= 1 && MixVolumeLUT != NULL) // 8bb: 16-bit mixers used? Calculate mix LUT.
 	{
 		for (uint16_t i = 0; i < MIXTABLESIZE; i++)
 		{
-			int16_t Value = i;
+			const int16_t Value = i;
+
 			int8_t WaveValue = (Value & 0xFF);
 			int8_t Volume = Value >> 8;
 
-			MixSegment[i] = ((Volume * WaveValue * (int16_t)MixVolume) + 64) >> 7;
+			MixVolumeLUT[i] = ((Volume * WaveValue * (int16_t)MixVolume) + 64) >> 7;
 		}
 	}
 
@@ -412,6 +413,14 @@ bool SB16_InitSound(int32_t mixingFrequency)
 	*/
 	Driver.MixMode = 3; // 8bb: "32 Bit Interpolated"
 
+	// 8bb: The 16-bit mixers uses a volume LUT. It's calculated in SB16_SetMixVolume().
+	if (Driver.MixMode <= 1)
+	{
+		MixVolumeLUT = (int16_t *)malloc(MIXTABLESIZE * sizeof (int16_t));
+		if (MixVolumeLUT == NULL)
+			return false;
+	}
+
 	return true;
 }
 
@@ -421,5 +430,11 @@ void SB16_UninitSound(void)
 	{
 		free(MixBuffer);
 		MixBuffer = NULL;
+	}
+
+	if (MixVolumeLUT != NULL)
+	{
+		free(MixVolumeLUT);
+		MixVolumeLUT = NULL;
 	}
 }
