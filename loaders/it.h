@@ -4,4 +4,4 @@
 #include <stdbool.h>
 #include "../it_d_rm.h"
 
-bool D_LoadIT(MEMFILE *m);
+bool LoadIT(MEMFILE *m);

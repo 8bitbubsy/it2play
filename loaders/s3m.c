@@ -8,20 +8,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include "../it_music.h"
 #include "../it_structs.h"
 #include "../it_d_rm.h"
 
 #define S3M_ROWS 64
 
+static void ClearEncodingInfo(void);
+static bool GetPatternLength(uint16_t Rows, uint16_t *LengthOut);
+static void EncodePattern(pattern_t *p, uint8_t Rows);
+static bool StorePattern(uint8_t NumRows, int32_t Pattern);
 static bool TranslateS3MPattern(uint8_t *Src, int32_t Pattern);
 
-bool D_LoadS3M(MEMFILE *m)
+static uint8_t *PatternDataArea, EncodingInfo[MAX_HOST_CHANNELS*6];
+
+bool LoadS3M(MEMFILE *m)
 {
 	uint8_t DefPan;
 	uint16_t Flags, SmpPtrs[100], PatPtrs[100];
 
+	if (!ReadBytes(m, Song.Header.SongName, 25)) return false;
 	mseek(m, 0x20, SEEK_SET);
 	if (!ReadBytes(m, &Song.Header.OrdNum, 2)) return false;
 	if (!ReadBytes(m, &Song.Header.SmpNum, 2)) return false;
@@ -165,15 +171,15 @@ bool D_LoadS3M(MEMFILE *m)
 		{
 			if (s->OffsetInFile != 0) // 8bb: added this check
 			{
-				bool is16Bit = !!(s->Flags & SMPF_16BIT);
+				bool Sample16Bit = !!(s->Flags & SMPF_16BIT);
 
-				uint32_t SampleBytes = s->Length * (1 + is16Bit);
+				uint32_t SampleBytes = s->Length << Sample16Bit;
 
 				if (!Music_AllocateSample(i, SampleBytes)) return false;
 				mseek(m, s->OffsetInFile, SEEK_SET);
 				if (!ReadBytes(m, s->Data, SampleBytes)) return false;
 
-				if (!is16Bit)
+				if (!Sample16Bit)
 				{
 					// 8bb: convert from unsigned to signed
 					int8_t *Ptr8 = (int8_t *)s->Data;
@@ -229,7 +235,23 @@ bool D_LoadS3M(MEMFILE *m)
 
 static bool TranslateS3MPattern(uint8_t *Src, int32_t Pattern)
 {
-	ClearPatternData();
+	PatternDataArea = (uint8_t *)malloc(MAX_HOST_CHANNELS * MAX_ROWS * 5);
+	if (PatternDataArea == NULL)
+		return false;
+
+	// 8bb: clear destination pattern
+	uint8_t *Ptr8 = PatternDataArea;
+	for (int32_t i = 0; i < 200; i++)
+	{
+		for (int32_t j = 0; j < MAX_HOST_CHANNELS; j++, Ptr8 += 5)
+		{
+			Ptr8[0] = 253; // note
+			Ptr8[1] = 0;   // ins
+			Ptr8[2] = 255; // vol
+			Ptr8[3] = 0;   // cmd
+			Ptr8[4] = 0;   // value
+		}
+	}
 
 	uint8_t *OrigDst = PatternDataArea;
 	for (int32_t i = 0; i < S3M_ROWS; i++)
@@ -323,5 +345,236 @@ static bool TranslateS3MPattern(uint8_t *Src, int32_t Pattern)
 		}
 	}
 
-	return StorePattern(S3M_ROWS, Pattern);
+	bool result = StorePattern(S3M_ROWS, Pattern);
+
+	free(PatternDataArea);
+	return result;
+}
+
+static void ClearEncodingInfo(void)
+{
+	uint8_t *Enc = EncodingInfo;
+	for (int32_t i = 0; i < MAX_HOST_CHANNELS; i++, Enc += 6)
+	{
+		Enc[0] = 0;   // mask
+		Enc[1] = 253; // note
+		Enc[2] = 0;   // ins
+		Enc[3] = 255; // vol
+		Enc[4] = 0;   // cmd
+		Enc[5] = 0;   // value
+	}
+}
+
+static bool GetPatternLength(uint16_t Rows, uint16_t *LengthOut)
+{
+	ClearEncodingInfo();
+
+	uint8_t *Src = PatternDataArea;
+	uint32_t Bytes = Rows; // End of row bytes added.
+
+	for (int32_t i = 0; i < Rows; i++)
+	{
+		uint8_t *Enc = EncodingInfo;
+		for (int32_t j = 0; j < MAX_HOST_CHANNELS; j++, Src += 5, Enc += 6)
+		{
+			if (Src[0] == 253 && Src[1] == 0 && Src[2] == 255 && Src[3] == 0 && Src[4] == 0)
+				continue;
+
+			Bytes++; // 1 byte for channel indication
+
+			uint8_t Mask = 0;
+
+			uint8_t Note = Src[0];
+			if (Note != 253)
+			{
+				if (Enc[1] != Note)
+				{
+					Enc[1] = Note;
+					Bytes++;
+					Mask |= 1;
+				}
+				else
+				{
+					Mask |= 16;
+				}
+			}
+
+			uint8_t Instr = Src[1];
+			if (Instr != 0)
+			{
+				if (Enc[2] != Instr)
+				{
+					Enc[2] = Instr;
+					Bytes++;
+					Mask |= 2;
+				}
+				else
+				{
+					Mask |= 32;
+				}
+			}
+
+			uint8_t Vol = Src[2];
+			if (Vol != 255)
+			{
+				if (Enc[3] != Vol)
+				{
+					Enc[3] = Vol;
+					Bytes++;
+					Mask |= 4;
+				}
+				else
+				{
+					Mask |= 64;
+				}
+			}
+
+			uint16_t EfxAndParam = *(uint16_t *)&Src[3];
+			if (EfxAndParam != 0)
+			{
+				if (*(uint16_t *)&Enc[4] != EfxAndParam)
+				{
+					*(uint16_t *)&Enc[4] = EfxAndParam;
+					Bytes += 2;
+					Mask |= 8;
+				}
+				else
+				{
+					Mask |= 128;
+				}
+			}
+
+			if (Mask != Enc[0])
+			{
+				Enc[0] = Mask;
+				Bytes++;
+			}
+		}
+	}
+
+	if (Bytes > 65535)
+		return false;
+
+	*LengthOut = (uint16_t)Bytes;
+	return true;
+}
+
+static void EncodePattern(pattern_t *p, uint8_t Rows)
+{
+	ClearEncodingInfo();
+
+	p->Rows = Rows;
+
+	uint8_t *Src = PatternDataArea;
+	uint8_t *Dst = p->PackedData;
+
+	for (int32_t i = 0; i < Rows; i++)
+	{
+		uint8_t *Enc = EncodingInfo;
+		for (uint8_t ch = 0; ch < MAX_HOST_CHANNELS; ch++, Src += 5, Enc += 6)
+		{
+			if (Src[0] == 253 && Src[1] == 0 && Src[2] == 255 && Src[3] == 0 && Src[4] == 0)
+				continue;
+
+			uint8_t Mask = 0;
+
+			uint8_t Note = Src[0];
+			if (Note != 253)
+			{
+				if (Enc[1] != Note)
+				{
+					Enc[1] = Note;
+					Mask |= 1;
+				}
+				else
+				{
+					Mask |= 16;
+				}
+			}
+
+			uint8_t Ins = Src[1];
+			if (Src[1] != 0)
+			{
+				if (Enc[2] != Ins)
+				{
+					Enc[2] = Ins;
+					Mask |= 2;
+				}
+				else
+				{
+					Mask |= 32;
+				}
+			}
+
+			uint8_t Vol = Src[2];
+			if (Vol != 255)
+			{
+				if (Enc[3] != Vol)
+				{
+					Enc[3] = Vol;
+					Mask |= 4;
+				}
+				else
+				{
+					Mask |= 64;
+				}
+			}
+
+			uint16_t EfxAndParam = *(uint16_t *)&Src[3];
+			if (EfxAndParam != 0)
+			{
+				if (EfxAndParam != *(uint16_t *)&Enc[4])
+				{
+					*(uint16_t *)&Enc[4] = EfxAndParam;
+					Mask |= 8;
+				}
+				else
+				{
+					Mask |= 128;
+				}
+			}
+
+			if (Enc[0] != Mask)
+			{
+				Enc[0] = Mask;
+
+				*Dst++ = (ch + 1) | 128; // read another mask...
+				*Dst++ = Mask;
+			}
+			else
+			{
+				*Dst++ = ch + 1;
+			}
+
+			if (Mask & 1)
+				*Dst++ = Note;
+
+			if (Mask & 2)
+				*Dst++ = Ins;
+
+			if (Mask & 4)
+				*Dst++ = Vol;
+
+			if (Mask & 8)
+			{
+				*(uint16_t *)Dst = EfxAndParam;
+				Dst += 2;
+			}
+		}
+
+		*Dst++ = 0;
+	}
+}
+
+static bool StorePattern(uint8_t NumRows, int32_t Pattern)
+{
+	uint16_t PackedLength;
+	if (!GetPatternLength(NumRows, &PackedLength))
+		return false;
+
+	if (!Music_AllocatePattern(Pattern, PackedLength))
+		return false;
+
+	EncodePattern(&Song.Pat[Pattern], NumRows);
+	return true;
 }

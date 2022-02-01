@@ -8,20 +8,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include "../it_music.h"
 #include "../it_structs.h"
 #include "../it_d_rm.h"
 
-static uint8_t decompBuffer[65536];
-static int32_t ptrListOffset;
+static void Decompress16BitData(int16_t *Dst, const uint8_t *Src, uint32_t BlockLen);
+static void Decompress8BitData(int8_t *Dst, const uint8_t *Src, uint32_t BlockLen);
+static bool LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool DeltaEncoded);
+static bool LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool DeltaEncoded);
 
-static void D_Decompress16BitData(int16_t *dst, uint8_t *src, uint32_t blockLen);
-static void D_Decompress8BitData(int8_t *dst, uint8_t *src, uint32_t blockLen);
-static void IT_LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded);
-static void IT_LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded);
-
-bool D_LoadIT(MEMFILE *m)
+bool LoadIT(MEMFILE *m)
 {
 	/*
 	** ===================================
@@ -29,8 +25,9 @@ bool D_LoadIT(MEMFILE *m)
 	** ===================================
 	*/
 
-	mseek(m, 4+26, SEEK_SET); // set to offset 4 (after "IMPM" magic and song name)
-	if (!ReadBytes(m, &Song.Header.PHiligt, 2)) return false;
+	mseek(m, 4, SEEK_CUR);
+	if (!ReadBytes(m, Song.Header.SongName, 25)) return false;
+	mseek(m, 1+2, SEEK_CUR);
 	if (!ReadBytes(m, &Song.Header.OrdNum, 2)) return false;
 	if (!ReadBytes(m, &Song.Header.InsNum, 2)) return false;
 	if (!ReadBytes(m, &Song.Header.SmpNum, 2)) return false;
@@ -44,7 +41,7 @@ bool D_LoadIT(MEMFILE *m)
 	if (!ReadBytes(m, &Song.Header.InitialSpeed, 1)) return false;
 	if (!ReadBytes(m, &Song.Header.InitialTempo, 1)) return false;
 	if (!ReadBytes(m, &Song.Header.PanSep, 1)) return false;
-	if (!ReadBytes(m, &Song.Header.PitchWheelDepth, 1)) return false;
+	mseek(m, 1, SEEK_CUR);
 	if (!ReadBytes(m, &Song.Header.MessageLength, 2)) return false;
 	if (!ReadBytes(m, &Song.Header.MessageOffset, 4)) return false;
 	mseek(m, 4, SEEK_CUR); // skip unwanted stuff
@@ -70,7 +67,7 @@ bool D_LoadIT(MEMFILE *m)
 	if (Song.Header.InitialTempo < 31)
 		Song.Header.InitialTempo = 31;
 
-	ptrListOffset = 192 + Song.Header.OrdNum;
+	int32_t PtrListOffset = 192 + Song.Header.OrdNum;
 
 	int16_t OrdersToLoad = Song.Header.OrdNum - 1; // IT2 does this (removes the count for the last 255 terminator)
 	if (OrdersToLoad > 0)
@@ -118,22 +115,22 @@ bool D_LoadIT(MEMFILE *m)
 	** ===================================
 	*/
 
-	mseek(m, ptrListOffset, SEEK_SET);
-	size_t insPtrOffset = mtell(m);
+	mseek(m, PtrListOffset, SEEK_SET);
+	size_t InsPtrOffset = mtell(m);
 
 	instrument_t *ins = Song.Ins;
 	for (uint32_t i = 0; i < Song.Header.InsNum; i++, ins++)
 	{
-		mseek(m, insPtrOffset + (i * 4), SEEK_SET);
+		mseek(m, InsPtrOffset + (i * 4), SEEK_SET);
 		if (meof(m)) return false;
 
-		uint32_t insOffset;
-		if (!ReadBytes(m, &insOffset, 4)) return false;
+		uint32_t InsOffset;
+		if (!ReadBytes(m, &InsOffset, 4)) return false;
 
-		if (insOffset == 0)
+		if (InsOffset == 0)
 			continue;
 
-		mseek(m, insOffset, SEEK_SET);
+		mseek(m, InsOffset, SEEK_SET);
 		if (meof(m)) return false;
 
 		if (Song.Header.Cmwt >= 0x200)
@@ -251,48 +248,47 @@ bool D_LoadIT(MEMFILE *m)
 	** ===================================
 	*/
 
-	mseek(m, ptrListOffset + (Song.Header.InsNum * 4), SEEK_SET);
-	size_t smpPtrOffset = mtell(m);
+	mseek(m, PtrListOffset + (Song.Header.InsNum * 4), SEEK_SET);
+	size_t SmpPtrOffset = mtell(m);
 
-	for (uint32_t i = 0; i < Song.Header.SmpNum; i++)
+	sample_t *s = Song.Smp;
+	for (uint32_t i = 0; i < Song.Header.SmpNum; i++, s++)
 	{
-		mseek(m, smpPtrOffset + (i * 4), SEEK_SET);
+		mseek(m, SmpPtrOffset + (i * 4), SEEK_SET);
 		if (meof(m)) return false;
 
-		uint32_t smpOffset;
-		if (!ReadBytes(m, &smpOffset, 4)) return false;
+		uint32_t SmpOffset;
+		if (!ReadBytes(m, &SmpOffset, 4)) return false;
 
-		if (smpOffset == 0)
+		if (SmpOffset == 0)
 			continue;
 
-		mseek(m, smpOffset, SEEK_SET);
+		mseek(m, SmpOffset, SEEK_SET);
 		if (meof(m)) return false;
 
-		sample_t *smp = &Song.Smp[i];
-
 		mseek(m, 4, SEEK_CUR); // skip unwanted stuff
-		if (!ReadBytes(m, smp->DOSFilename, 13)) return false;
-		if (!ReadBytes(m, &smp->GvL, 1)) return false;
-		if (!ReadBytes(m, &smp->Flags, 1)) return false;
-		if (!ReadBytes(m, &smp->Vol, 1)) return false;
-		if (!ReadBytes(m, smp->SampleName, 26)) return false;
-		if (!ReadBytes(m, &smp->Cvt, 1)) return false;
-		if (!ReadBytes(m, &smp->DfP, 1)) return false;
-		if (!ReadBytes(m, &smp->Length, 4)) return false;
-		if (!ReadBytes(m, &smp->LoopBeg, 4)) return false;
-		if (!ReadBytes(m, &smp->LoopEnd, 4)) return false;
-		if (!ReadBytes(m, &smp->C5Speed, 4)) return false;
-		if (!ReadBytes(m, &smp->SusLoopBeg, 4)) return false;
-		if (!ReadBytes(m, &smp->SusLoopEnd, 4)) return false;
-		if (!ReadBytes(m, &smp->OffsetInFile, 4)) return false;
-		if (!ReadBytes(m, &smp->ViS, 1)) return false;
-		if (!ReadBytes(m, &smp->ViD, 1)) return false;
-		if (!ReadBytes(m, &smp->ViR, 1)) return false;
-		if (!ReadBytes(m, &smp->ViT, 1)) return false;
+		if (!ReadBytes(m, s->DOSFilename, 13)) return false;
+		if (!ReadBytes(m, &s->GvL, 1)) return false;
+		if (!ReadBytes(m, &s->Flags, 1)) return false;
+		if (!ReadBytes(m, &s->Vol, 1)) return false;
+		if (!ReadBytes(m, s->SampleName, 26)) return false;
+		if (!ReadBytes(m, &s->Cvt, 1)) return false;
+		if (!ReadBytes(m, &s->DfP, 1)) return false;
+		if (!ReadBytes(m, &s->Length, 4)) return false;
+		if (!ReadBytes(m, &s->LoopBeg, 4)) return false;
+		if (!ReadBytes(m, &s->LoopEnd, 4)) return false;
+		if (!ReadBytes(m, &s->C5Speed, 4)) return false;
+		if (!ReadBytes(m, &s->SusLoopBeg, 4)) return false;
+		if (!ReadBytes(m, &s->SusLoopEnd, 4)) return false;
+		if (!ReadBytes(m, &s->OffsetInFile, 4)) return false;
+		if (!ReadBytes(m, &s->ViS, 1)) return false;
+		if (!ReadBytes(m, &s->ViD, 1)) return false;
+		if (!ReadBytes(m, &s->ViR, 1)) return false;
+		if (!ReadBytes(m, &s->ViT, 1)) return false;
 
 		// just in case
-		smp->DOSFilename[12] = '\0';
-		smp->SampleName[25] = '\0';
+		s->DOSFilename[12] = '\0';
+		s->SampleName[25] = '\0';
 	}
 
 	/* ===================================
@@ -300,7 +296,7 @@ bool D_LoadIT(MEMFILE *m)
 	** ===================================
 	*/
 
-	sample_t *s = Song.Smp;
+	s = Song.Smp;
 	for (uint32_t i = 0; i < Song.Header.SmpNum; i++, s++)
 	{
 		if (s->OffsetInFile == 0 || !(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
@@ -310,12 +306,12 @@ bool D_LoadIT(MEMFILE *m)
 		if (meof(m))
 			return false;
 
-		bool isCompressed = !!(s->Flags & SMPF_COMPRESSED);
-		bool is16Bit = !!(s->Flags & SMPF_16BIT);
-		bool signedSamples = !!(s->Cvt & 1);
-		bool isDeltaEncoded = !!(s->Cvt & 4);
+		bool Compressed = !!(s->Flags & SMPF_COMPRESSED);
+		bool Sample16Bit = !!(s->Flags & SMPF_16BIT);
+		bool SignedSamples = !!(s->Cvt & 1);
+		bool DeltaEncoded = !!(s->Cvt & 4);
 
-		if (isDeltaEncoded && !isCompressed)
+		if (DeltaEncoded && !Compressed)
 			continue;
 
 		if (s->Length == 0 || !(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
@@ -324,38 +320,45 @@ bool D_LoadIT(MEMFILE *m)
 		if (s->Cvt & 0b11111010)
 			continue; // not supported
 
-		if (!Music_AllocateSample(i, s->Length * (1 + is16Bit))) return false;
+		if (!Music_AllocateSample(i, s->Length << Sample16Bit))
+			return false;
 
-		if (isCompressed)
+		if (Compressed)
 		{
-			if (is16Bit)
-				IT_LoadCompressed16BitSample(m, s, isDeltaEncoded);
+			if (Sample16Bit)
+			{
+				if (!LoadCompressed16BitSample(m, s, DeltaEncoded))
+					return false;
+			}
 			else
-				IT_LoadCompressed8BitSample(m, s, isDeltaEncoded);
+			{
+				if (!LoadCompressed8BitSample(m, s, DeltaEncoded))
+					return false;
+			}
 		}
 		else
 		{
 			mread(s->Data, 1, s->Length, m);
 		}
 
-		// convert unsigned sample to signed
-		if (!signedSamples)
+		// 8bb: convert unsigned sample to signed
+		if (!SignedSamples)
 		{
-			if (is16Bit)
+			if (Sample16Bit)
 			{
-				int16_t *Data = (int16_t *)s->Data;
+				int16_t *Ptr16 = (int16_t *)s->Data;
 				for (uint32_t j = 0; j < s->Length; j++)
-					Data[j] ^= 0x8000;
+					Ptr16[j] ^= 0x8000;
 			}
 			else
 			{
-				int8_t *Data = (int8_t *)s->Data;
+				int8_t *Ptr8 = (int8_t *)s->Data;
 				for (uint32_t j = 0; j < s->Length; j++)
-					Data[j] ^= 0x80;
+					Ptr8[j] ^= 0x80;
 			}
 		}
 
-		if (is16Bit) // 8bb: Music_AllocateSample() also set s->Length, divide by two if 16-bit
+		if (Sample16Bit) // 8bb: Music_AllocateSample() also set s->Length, divide by two if 16-bit
 			s->Length >>= 1;
 	}
 
@@ -365,288 +368,298 @@ bool D_LoadIT(MEMFILE *m)
 	** ===================================
 	*/
 
-	mseek(m, ptrListOffset + (Song.Header.InsNum * 4) + (Song.Header.SmpNum * 4), SEEK_SET);
-	size_t patPtrOffset = mtell(m);
+	mseek(m, PtrListOffset + (Song.Header.InsNum * 4) + (Song.Header.SmpNum * 4), SEEK_SET);
+	size_t PatPtrOffset = mtell(m);
 
-	pattern_t *pat = Song.Pat;
-	for (uint32_t i = 0; i < Song.Header.PatNum; i++, pat++)
+	pattern_t *p = Song.Pat;
+	for (uint32_t i = 0; i < Song.Header.PatNum; i++, p++)
 	{
-		mseek(m, patPtrOffset + (i * 4), SEEK_SET);
+		mseek(m, PatPtrOffset + (i * 4), SEEK_SET);
 		if (meof(m))
 			return false;
 
-		uint32_t patOffset;
-		if (!ReadBytes(m, &patOffset, 4)) return false;
+		uint32_t PatOffset;
+		if (!ReadBytes(m, &PatOffset, 4)) return false;
 
-		if (patOffset == 0)
+		if (PatOffset == 0)
 			continue;
 
-		mseek(m, patOffset, SEEK_SET);
+		mseek(m, PatOffset, SEEK_SET);
 		if (meof(m))
 			return false;
 
-		uint16_t patLength;
-		if (!ReadBytes(m, &patLength, 2)) return false;
-		if (!ReadBytes(m, &pat->Rows, 2)) return false;
+		uint16_t PatLength;
+		if (!ReadBytes(m, &PatLength, 2)) return false;
+		if (!ReadBytes(m, &p->Rows, 2)) return false;
 
-		if (patLength == 0 || pat->Rows == 0)
+		if (PatLength == 0 || p->Rows == 0)
 			continue;
 
-		if (!Music_AllocatePattern(i, patLength)) return false;
+		mseek(m, 4, SEEK_CUR);
 
-		mseek(m, 4, SEEK_CUR); // skip unwanted stuff
-
-		if (!ReadBytes(m, pat->PackedData, patLength)) return false;
+		if (!Music_AllocatePattern(i, PatLength)) return false;
+		if (!ReadBytes(m, p->PackedData, PatLength)) return false;
 	}
 
 	return true;
 }
 
-static void D_Decompress16BitData(int16_t *dst, uint8_t *src, uint32_t blockLen)
+static void Decompress16BitData(int16_t *Dst, const uint8_t *Src, uint32_t BlockLength)
 {
-	uint8_t byte8, bitDepth, bitDepthInv, bitsRead;
-	uint16_t bytes16, lastVal;
-	uint32_t bytes32;
+	uint8_t Byte8, BitDepth, BitDepthInv, BitsRead;
+	uint16_t Bytes16, LastVal;
+	uint32_t Bytes32;
 
-	lastVal = 0;
-	bitDepth = 17;
-	bitDepthInv = bitsRead = 0;
+	LastVal = 0;
+	BitDepth = 17;
+	BitDepthInv = BitsRead = 0;
 
-	blockLen >>= 1;
-	while (blockLen != 0)
+	BlockLength >>= 1;
+	while (BlockLength != 0)
 	{
-		bytes32 = (*(uint32_t *)src) >> bitsRead;
+		Bytes32 = (*(uint32_t *)Src) >> BitsRead;
 
-		bitsRead += bitDepth;
-		src += bitsRead >> 3;
-		bitsRead &= 7;
+		BitsRead += BitDepth;
+		Src += BitsRead >> 3;
+		BitsRead &= 7;
 
-		if (bitDepth <= 6)
+		if (BitDepth <= 6)
 		{
-			bytes32 <<= bitDepthInv & 0x1F;
+			Bytes32 <<= BitDepthInv & 0x1F;
 
-			bytes16 = (uint16_t)bytes32;
-			if (bytes16 != 0x8000)
+			Bytes16 = (uint16_t)Bytes32;
+			if (Bytes16 != 0x8000)
 			{
-				lastVal += (int16_t)bytes16 >> (bitDepthInv & 0x1F); // arithmetic shift
-				*dst++ = lastVal;
-				blockLen--;
+				LastVal += (int16_t)Bytes16 >> (BitDepthInv & 0x1F); // arithmetic shift
+				*Dst++ = LastVal;
+				BlockLength--;
 			}
 			else
 			{
-				byte8 = ((bytes32 >> 16) & 0xF) + 1;
-				if (byte8 >= bitDepth)
-					byte8++;
-				bitDepth = byte8;
+				Byte8 = ((Bytes32 >> 16) & 0xF) + 1;
+				if (Byte8 >= BitDepth)
+					Byte8++;
+				BitDepth = Byte8;
 
-				bitDepthInv = 16;
-				if (bitDepthInv < bitDepth)
-					bitDepthInv++;
-				bitDepthInv -= bitDepth;
+				BitDepthInv = 16;
+				if (BitDepthInv < BitDepth)
+					BitDepthInv++;
+				BitDepthInv -= BitDepth;
 
-				bitsRead += 4;
+				BitsRead += 4;
 			}
 
 			continue;
 		}
 
-		bytes16 = (uint16_t)bytes32;
+		Bytes16 = (uint16_t)Bytes32;
 
-		if (bitDepth <= 16)
+		if (BitDepth <= 16)
 		{
-			uint16_t DX = 0xFFFF >> (bitDepthInv & 0x1F);
-			bytes16 &= DX;
+			uint16_t DX = 0xFFFF >> (BitDepthInv & 0x1F);
+			Bytes16 &= DX;
 			DX = (DX >> 1) - 8;
 
-			if (bytes16 > DX+16 || bytes16 <= DX)
+			if (Bytes16 > DX+16 || Bytes16 <= DX)
 			{
-				bytes16 <<= bitDepthInv & 0x1F;
-				bytes16 = (int16_t)bytes16 >> (bitDepthInv & 0x1F); // arithmetic shift
-				lastVal += bytes16;
-				*dst++ = lastVal;
-				blockLen--;
+				Bytes16 <<= BitDepthInv & 0x1F;
+				Bytes16 = (int16_t)Bytes16 >> (BitDepthInv & 0x1F); // arithmetic shift
+				LastVal += Bytes16;
+				*Dst++ = LastVal;
+				BlockLength--;
 				continue;
 			}
 
-			byte8 = (uint8_t)(bytes16 - DX);
-			if (byte8 >= bitDepth)
-				byte8++;
-			bitDepth = byte8;
+			Byte8 = (uint8_t)(Bytes16 - DX);
+			if (Byte8 >= BitDepth)
+				Byte8++;
+			BitDepth = Byte8;
 
-			bitDepthInv = 16;
-			if (bitDepthInv < bitDepth)
-				bitDepthInv++;
-			bitDepthInv -= bitDepth;
+			BitDepthInv = 16;
+			if (BitDepthInv < BitDepth)
+				BitDepthInv++;
+			BitDepthInv -= BitDepth;
 			continue;
 		}
 
-		if (bytes32 & 0x10000)
+		if (Bytes32 & 0x10000)
 		{
-			bitDepth = (uint8_t)(bytes16 + 1);
-			bitDepthInv = 16 - bitDepth;
+			BitDepth = (uint8_t)(Bytes16 + 1);
+			BitDepthInv = 16 - BitDepth;
 		}
 		else
 		{
-			lastVal += bytes16;
-			*dst++ = lastVal;
-			blockLen--;
+			LastVal += Bytes16;
+			*Dst++ = LastVal;
+			BlockLength--;
 		}
 	}
 }
 
-static void D_Decompress8BitData(int8_t *dst, uint8_t *src, uint32_t blockLen)
+static void Decompress8BitData(int8_t *Dst, const uint8_t *Src, uint32_t BlockLength)
 {
-	uint8_t lastVal, byte8, bitDepth, bitDepthInv, bitsRead;
-	uint16_t bytes16;
+	uint8_t LastVal, Byte8, BitDepth, BitDepthInv, BitsRead;
+	uint16_t Bytes16;
 
-	lastVal = 0;
-	bitDepth = 9;
-	bitDepthInv = bitsRead = 0;
+	LastVal = 0;
+	BitDepth = 9;
+	BitDepthInv = BitsRead = 0;
 
-	while (blockLen != 0)
+	while (BlockLength != 0)
 	{
-		bytes16 = (*(uint16_t *)src) >> bitsRead;
+		Bytes16 = (*(uint16_t *)Src) >> BitsRead;
 
-		bitsRead += bitDepth;
-		src += (bitsRead >> 3);
-		bitsRead &= 7;
+		BitsRead += BitDepth;
+		Src += (BitsRead >> 3);
+		BitsRead &= 7;
 
-		byte8 = bytes16 & 0xFF;
+		Byte8 = Bytes16 & 0xFF;
 
-		if (bitDepth <= 6)
+		if (BitDepth <= 6)
 		{
-			bytes16 <<= (bitDepthInv & 0x1F);
-			byte8 = bytes16 & 0xFF;
+			Bytes16 <<= (BitDepthInv & 0x1F);
+			Byte8 = Bytes16 & 0xFF;
 
-			if (byte8 != 0x80)
+			if (Byte8 != 0x80)
 			{
-				lastVal += (int8_t)byte8 >> (bitDepthInv & 0x1F); // arithmetic shift
-				*dst++ = lastVal;
-				blockLen--;
+				LastVal += (int8_t)Byte8 >> (BitDepthInv & 0x1F); // arithmetic shift
+				*Dst++ = LastVal;
+				BlockLength--;
 				continue;
 			}
 
-			byte8 = (bytes16 >> 8) & 7;
-			bitsRead += 3;
-			src += (bitsRead >> 3);
-			bitsRead &= 7;
+			Byte8 = (Bytes16 >> 8) & 7;
+			BitsRead += 3;
+			Src += (BitsRead >> 3);
+			BitsRead &= 7;
 		}
 		else
 		{
-			if (bitDepth == 8)
+			if (BitDepth == 8)
 			{
-				if (byte8 < 0x7C || byte8 > 0x83)
+				if (Byte8 < 0x7C || Byte8 > 0x83)
 				{
-					lastVal += byte8;
-					*dst++ = lastVal;
-					blockLen--;
+					LastVal += Byte8;
+					*Dst++ = LastVal;
+					BlockLength--;
 					continue;
 				}
-				byte8 -= 0x7C;
+				Byte8 -= 0x7C;
 			}
-			else if (bitDepth < 8)
+			else if (BitDepth < 8)
 			{
-				byte8 <<= 1;
-				if (byte8 < 0x78 || byte8 > 0x86)
+				Byte8 <<= 1;
+				if (Byte8 < 0x78 || Byte8 > 0x86)
 				{
-					lastVal += (int8_t)byte8 >> (bitDepthInv & 0x1F); // arithmetic shift
-					*dst++ = lastVal;
-					blockLen--;
+					LastVal += (int8_t)Byte8 >> (BitDepthInv & 0x1F); // arithmetic shift
+					*Dst++ = LastVal;
+					BlockLength--;
 					continue;
 				}
-				byte8 = (byte8 >> 1) - 0x3C;
+				Byte8 = (Byte8 >> 1) - 0x3C;
 			}
 			else
 			{
-				bytes16 &= 0x1FF;
-				if ((bytes16 & 0x100) == 0)
+				Bytes16 &= 0x1FF;
+				if ((Bytes16 & 0x100) == 0)
 				{
-					lastVal += byte8;
-					*dst++ = lastVal;
-					blockLen--;
+					LastVal += Byte8;
+					*Dst++ = LastVal;
+					BlockLength--;
 					continue;
 				}
 			}
 		}
 
-		byte8++;
-		if (byte8 >= bitDepth)
-			byte8++;
-		bitDepth = byte8;
+		Byte8++;
+		if (Byte8 >= BitDepth)
+			Byte8++;
+		BitDepth = Byte8;
 
-		bitDepthInv = 8;
-		if (bitDepthInv < bitDepth)
-			bitDepthInv++;
-		bitDepthInv -= bitDepth;
+		BitDepthInv = 8;
+		if (BitDepthInv < BitDepth)
+			BitDepthInv++;
+		BitDepthInv -= BitDepth;
 	}
 }
 
-static void IT_LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded)
+static bool LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool DeltaEncoded)
 {
-	uint16_t packedLen;
+	int8_t *DstPtr = (int8_t *)s->Data;
 
-	int8_t *dstPtr = (int8_t *)s->Data;
+	uint8_t *DecompBuffer = (uint8_t *)malloc(65536);
+	if (DecompBuffer == NULL)
+		return false;
 
 	uint32_t i = s->Length;
 	while (i > 0)
 	{
-		uint32_t bytesToUnpack = 32768;
-		if (bytesToUnpack > i)
-			bytesToUnpack = i;
+		uint32_t BytesToUnpack = 32768;
+		if (BytesToUnpack > i)
+			BytesToUnpack = i;
 
-		mread(&packedLen, sizeof (uint16_t), 1, m);
-		mread(decompBuffer, 1, packedLen, m);
+		uint16_t PackedLen;
+		mread(&PackedLen, sizeof (uint16_t), 1, m);
+		mread(DecompBuffer, 1, PackedLen, m);
 
-		D_Decompress16BitData((int16_t *)dstPtr, decompBuffer, bytesToUnpack);
+		Decompress16BitData((int16_t *)DstPtr, DecompBuffer, BytesToUnpack);
 
-		if (deltaEncoded) // convert from delta values to PCM
+		if (DeltaEncoded) // 8bb: convert from delta values to PCM
 		{
-			int16_t *ptr16 = (int16_t *)dstPtr;
-			int16_t lastSmp16 = 0; // yes, reset this every block!
+			int16_t *Ptr16 = (int16_t *)DstPtr;
+			int16_t LastSmp16 = 0; // 8bb: yes, reset this every block!
 
-			const uint32_t len = bytesToUnpack >> 1;
-			for (uint32_t j = 0; j < len; j++)
+			const uint32_t Length = BytesToUnpack >> 1;
+			for (uint32_t j = 0; j < Length; j++)
 			{
-				lastSmp16 += ptr16[j];
-				ptr16[j] = lastSmp16;
+				LastSmp16 += Ptr16[j];
+				Ptr16[j] = LastSmp16;
 			}
 		}
 
-		dstPtr += bytesToUnpack;
-		i -= bytesToUnpack;
+		DstPtr += BytesToUnpack;
+		i -= BytesToUnpack;
 	}
+
+	free(DecompBuffer);
+	return true;
 }
 
-static void IT_LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool deltaEncoded)
+static bool LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool DeltaEncoded)
 {
-	uint16_t packedLen;
-	int8_t *dstPtr = (int8_t *)s->Data;
+	int8_t *DstPtr = (int8_t *)s->Data;
+
+	uint8_t *DecompBuffer = (uint8_t *)malloc(65536);
+	if (DecompBuffer == NULL)
+		return false;
 
 	uint32_t i = s->Length;
 	while (i > 0)
 	{
-		uint32_t bytesToUnpack = 32768;
-		if (bytesToUnpack > i)
-			bytesToUnpack = i;
+		uint32_t BytesToUnpack = 32768;
+		if (BytesToUnpack > i)
+			BytesToUnpack = i;
 
-		mread(&packedLen, sizeof (uint16_t), 1, m);
-		mread(decompBuffer, 1, packedLen, m);
+		uint16_t PackedLen;
+		mread(&PackedLen, sizeof (uint16_t), 1, m);
+		mread(DecompBuffer, 1, PackedLen, m);
 
-		D_Decompress8BitData(dstPtr, decompBuffer, bytesToUnpack);
+		Decompress8BitData(DstPtr, DecompBuffer, BytesToUnpack);
 
-		if (deltaEncoded) // convert from delta values to PCM
+		if (DeltaEncoded) // 8bb: convert from delta values to PCM
 		{
-			int8_t lastSmp8 = 0; // yes, reset this every block!
-
-			const uint32_t len = bytesToUnpack;
-			for (uint32_t j = 0; j < len; j++)
+			int8_t LastSmp8 = 0; // 8bb: yes, reset this every block!
+			for (uint32_t j = 0; j < BytesToUnpack; j++)
 			{
-				lastSmp8 += dstPtr[j];
-				dstPtr[j] = lastSmp8;
+				LastSmp8 += DstPtr[j];
+				DstPtr[j] = LastSmp8;
 			}
 		}
 
-		dstPtr += bytesToUnpack;
-		i -= bytesToUnpack;
+		DstPtr += BytesToUnpack;
+		i -= BytesToUnpack;
 	}
+
+	free(DecompBuffer);
+	return true;
 }

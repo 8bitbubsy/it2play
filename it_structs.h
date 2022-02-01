@@ -90,6 +90,7 @@ enum // 8bb: audio driver flags
 #define MAX_SAMPLES 100
 #define MAX_INSTRUMENTS 100
 #define MAX_ORDERS 256
+#define MAX_ROWS 200
 #define MAX_HOST_CHANNELS 64
 #define MAX_SLAVE_CHANNELS 256
 #define MAX_SONGMSG_LENGTH 8000
@@ -205,8 +206,8 @@ typedef struct slaveChn_t
 typedef struct it_header_t
 {
 	char SongName[26];
-	uint16_t PHiligt, OrdNum, InsNum, SmpNum, PatNum, Cwtv, Cmwt, Flags, Special;
-	uint8_t GlobalVol, MixVolume, InitialSpeed, InitialTempo, PanSep, PitchWheelDepth;
+	uint16_t OrdNum, InsNum, SmpNum, PatNum, Cwtv, Cmwt, Flags, Special;
+	uint8_t GlobalVol, MixVolume, InitialSpeed, InitialTempo, PanSep;
 	uint16_t MessageLength;
 	uint32_t MessageOffset;
 	uint8_t ChnlPan[MAX_HOST_CHANNELS], ChnlVol[MAX_HOST_CHANNELS];
