@@ -24,8 +24,6 @@ void SB16MMX_MixSamples(void)
 
 	memset(MixBuffer, 0, Driver.BytesToMix * 2 * sizeof (int32_t));
 
-	int16_t OldSamplesBug = 0;
-
 	slaveChn_t *sc = sChn;
 	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
 	{
@@ -44,7 +42,7 @@ void SB16MMX_MixSamples(void)
 		}
 		else
 		{
-			OldSamplesBug = 0;
+			int16_t OldSamplesBug = 0;
 
 			if (sc->Flags & SF_FREQ_CHANGE)
 			{
