@@ -5,6 +5,7 @@ This is a direct port of the original asm source codes. \
 The project contains example code in the it2play folder on how to interface with the API.
 
 # Notes
+- The default driver (HQ) is my own, and has better BPM precision + stereo sample support. \
 - it2play uses integer arithmetics for pitch slides, just like IT2.14 (IT2.15 uses FPU code). \
   This was done to better match IT2.14, which is the version most people used (IT2.15 was paid software).
 - To compile it2play (the test program) on macOS/Linux, you need SDL2
