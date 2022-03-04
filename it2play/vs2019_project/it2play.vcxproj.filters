@@ -65,6 +65,12 @@
     <ClCompile Include="..\..\loaders\s3m.c">
       <Filter>loaders</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\it2drivers\hq.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\it2drivers\hq_m.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\audiodrivers\winmm\winmm.h">
@@ -107,6 +113,12 @@
     </ClInclude>
     <ClInclude Include="..\..\loaders\s3m.h">
       <Filter>loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\hq.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\hq_m.h">
+      <Filter>it2drivers</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

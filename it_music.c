@@ -18,13 +18,14 @@
 #include "it2drivers/sb16mmx.h"
 #include "it2drivers/sb16.h"
 #include "it2drivers/wavwriter.h"
+#include "it2drivers/hq.h"
 
 // 8bb: added these
 static bool (*DriverInitSound)(int32_t);
 static void (*DriverUninitSound)(void);
 static void (*DriverMix)(int32_t, int16_t *);
 static void (*DriverResetMixer)(void);
-static void (*DriverPostMix)(int16_t *, int32_t);
+static int32_t (*DriverPostMix)(int16_t *, int32_t);
 static void (*DriverMixSamples)(void);
 
 // 8bb: globalized
@@ -442,7 +443,7 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 	sc->DCT = ins->DCT;
 	sc->DCA = ins->DCA;
 
-	if (hc->MCh != 0) // 8bb: MIDI used?
+	if (hc->MCh != 0) // 8bb: MIDI?
 	{
 		sc->MCh = ins->MCh;
 		sc->MPr = ins->MPr;
@@ -475,15 +476,15 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 	sc->Pan = sc->PS = pan;
 
 	// Envelope init
-	sc->VEnvState.Value = 64 << 16; // 8bb: yes, clears frac!
+	sc->VEnvState.Value = 64 << 16; // 8bb: clears fractional part
 	sc->VEnvState.Tick = sc->VEnvState.NextTick = 0;
-	sc->VEnvState.CurNode = 0; // 8bb: also clears channel filter cutoff...
+	sc->VEnvState.CurNode = 0;
 
-	sc->PEnvState.Value = 0; // 8bb: yes, clears frac!
+	sc->PEnvState.Value = 0; // 8bb: clears fractional part
 	sc->PEnvState.Tick = sc->PEnvState.NextTick = 0;
 	sc->PEnvState.CurNode = 0;
 
-	sc->PtEnvState.Value = 0; // 8bb: yes, clears frac!
+	sc->PtEnvState.Value = 0; // 8bb: clears fractional part
 	sc->PtEnvState.Tick = sc->PtEnvState.NextTick = 0;
 	sc->PtEnvState.CurNode = 0;
 
@@ -1350,7 +1351,11 @@ static void PreInitCommand(hostChn_t *hc)
 
 			hc->Nt2 = ins->SmpNoteTable[hc->Nte] & 0xFF;
 
-			if (ins->MCh == 0)
+			/* 8bb:
+			** Added >128 check to prevent instruments with ModPlug/OpenMPT plugins
+			** from being handled as MIDI (would result in silence, and crash IT2).
+			*/
+			if (ins->MCh == 0 || ins->MCh > 128)
 			{
 				hc->Smp = ins->SmpNoteTable[hc->Nte] >> 8;
 			}
@@ -1976,7 +1981,7 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 
 		Driver.Flags = DF_SUPPORTS_MIDI | DF_USES_VOLRAMP | DF_HAS_RESONANCE_FILTER;
 	}
-	else // 8bb: DRIVER_SB16MMX (default)
+	else if (DriverType == DRIVER_SB16MMX)
 	{
 		DriverInitSound = SB16MMX_InitSound;
 		DriverUninitSound = SB16MMX_UninitSound;
@@ -1987,6 +1992,20 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 		DriverResetMixer = SB16MMX_ResetMixer;
 		DriverPostMix = SB16MMX_PostMix;
 		DriverMixSamples = SB16MMX_MixSamples;
+
+		Driver.Flags = DF_SUPPORTS_MIDI | DF_USES_VOLRAMP | DF_HAS_RESONANCE_FILTER;
+	}
+	else // 8bb: HQ (default, my own high-quality driver)
+	{
+		DriverInitSound = HQ_InitSound;
+		DriverUninitSound = HQ_UninitSound;
+		DriverMix = HQ_Mix;
+		DriverSetTempo = HQ_SetTempo;
+		DriverSetMixVolume = HQ_SetMixVolume;
+		DriverFixSamples = HQ_FixSamples;
+		DriverResetMixer = HQ_ResetMixer;
+		DriverPostMix = HQ_PostMix;
+		DriverMixSamples = HQ_MixSamples;
 
 		Driver.Flags = DF_SUPPORTS_MIDI | DF_USES_VOLRAMP | DF_HAS_RESONANCE_FILTER;
 	}
@@ -2179,10 +2198,11 @@ void Music_ReleaseSample(uint32_t sample)
 	assert(sample < MAX_SAMPLES);
 	sample_t *smp = &Song.Smp[sample];
 
-	if (smp->Data != NULL)
-		free(smp->Data);
+	if (smp->OrigData  != NULL) free(smp->OrigData);
+	if (smp->OrigDataR != NULL) free(smp->OrigDataR);
 
-	smp->Data = NULL;
+	smp->Data  = smp->OrigData  = NULL;
+	smp->DataR = smp->OrigDataR = NULL;
 
 	unlockMixer();
 }
@@ -2205,17 +2225,40 @@ bool Music_AllocatePattern(uint32_t pattern, uint32_t length)
 bool Music_AllocateSample(uint32_t sample, uint32_t length)
 {
 	assert(sample < MAX_SAMPLES);
-	sample_t *smp = &Song.Smp[sample];
+	sample_t *s = &Song.Smp[sample];
 
-	Music_ReleaseSample(sample);
+	// 8bb: done a little differently than IT2
 
-	int8_t *Data = (int8_t *)malloc(length + 8); // 8bb: +8 extra bytes (for interpolation taps, filled later)
-	if (Data == NULL)
+	s->OrigData = (int8_t *)malloc(length + SAMPLE_PAD_LENGTH); // 8bb: extra bytes for interpolation taps, filled later
+	if (s->OrigData == NULL)
 		return false;
 
-	smp->Data = Data;
-	smp->Length = length;
-	smp->Flags |= SMPF_ASSOCIATED_WITH_HEADER;
+	memset((int8_t *)s->OrigData, 0, SMP_DAT_OFFSET);
+	memset((int8_t *)s->OrigData + length, 0, 32);
+
+	// 8bb: offset sample so that we can fix negative interpolation taps
+	s->Data = (int8_t *)s->OrigData + SMP_DAT_OFFSET;
+
+	s->Length = length;
+	s->Flags |= SMPF_ASSOCIATED_WITH_HEADER;
+
+	return true;
+}
+
+bool Music_AllocateRightSample(uint32_t sample, uint32_t length) // 8bb: added this
+{
+	assert(sample < MAX_SAMPLES);
+	sample_t *s = &Song.Smp[sample];
+
+	s->OrigDataR = (int8_t *)malloc(length + SAMPLE_PAD_LENGTH); // 8bb: extra bytes for interpolation taps, filled later
+	if (s->OrigDataR == NULL)
+		return false;
+
+	memset((int8_t *)s->OrigDataR, 0, SMP_DAT_OFFSET);
+	memset((int8_t *)s->OrigDataR + length, 0, 32);
+
+	// 8bb: offset sample so that we can fix negative interpolation taps
+	s->DataR = (int8_t *)s->OrigDataR + SMP_DAT_OFFSET;
 
 	return true;
 }
@@ -2322,8 +2365,7 @@ void WAVRender_Abort(void)
 
 bool Music_RenderToWAV(const char *filenameOut)
 {
-	const int32_t LowestTempo = 31; // 8bb: 31 is possible through initial tempo (but 32 is general minimum)
-	const int32_t MaxSamplesToMix = (((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) / LowestTempo) + 1;
+	const int32_t MaxSamplesToMix = (((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) / LOWEST_BPM_POSSIBLE) + 1;
 
 	int16_t *AudioBuffer = (int16_t *)malloc(MaxSamplesToMix * 2 * sizeof (int16_t));
 	if (AudioBuffer == NULL)
@@ -2355,10 +2397,10 @@ bool Music_RenderToWAV(const char *filenameOut)
 		}
 
 		DriverMixSamples();
-		DriverPostMix(AudioBuffer, Driver.BytesToMix);
+		int32_t BytesToMix = DriverPostMix(AudioBuffer, 0);
 
-		fwrite(AudioBuffer, 2, Driver.BytesToMix * 2, f);
-		TotalSamples += Driver.BytesToMix * 2;
+		fwrite(AudioBuffer, 2, BytesToMix * 2, f);
+		TotalSamples += BytesToMix * 2;
 	}
 	WAVRender_Flag = false;
 

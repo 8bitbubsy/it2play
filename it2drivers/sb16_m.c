@@ -1,12 +1,17 @@
-/*
-** ---- SB16 IT2 driver (mixing code) ----
-*/
-
 #include <stdint.h>
 #include <stdbool.h>
 #include "../it_structs.h"
 #include "../it_music.h"
 #include "sb16_m.h"
+
+static void M32Mix8(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Mix16(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Mix8S(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Mix16S(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Mix8I(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Mix16I(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Mix8IS(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Mix16IS(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 
 #define Get32Bit8Waveform \
 	sample = smp[0]; \
@@ -94,7 +99,7 @@ const mixFunc SB16_MixFunctionTables[8] =
 void M32Mix8(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	const int8_t *base = (int8_t *)sc->SmpOffs->Data;
-	const int8_t *smp = base + sc->SampleOffset;
+	const int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -111,13 +116,13 @@ void M32Mix8(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Mix8_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
 void M32Mix16(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	const int16_t *base = (int16_t *)sc->SmpOffs->Data;
-	const int16_t *smp = base + sc->SampleOffset;
+	const int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -134,13 +139,13 @@ void M32Mix16(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Mix16_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
 void M32Mix8S(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	const int8_t *base = (int8_t *)sc->SmpOffs->Data;
-	const int8_t *smp = base + sc->SampleOffset;
+	const int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -157,13 +162,13 @@ void M32Mix8S(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Mix8S_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
 void M32Mix16S(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	const int16_t *base = (int16_t *)sc->SmpOffs->Data;
-	const int16_t *smp = base + sc->SampleOffset;
+	const int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -180,13 +185,13 @@ void M32Mix16S(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Mix16S_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
 void M32Mix8I(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	const int8_t *base = (int8_t *)sc->SmpOffs->Data;
-	const int8_t *smp = base + sc->SampleOffset;
+	const int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -203,13 +208,13 @@ void M32Mix8I(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Mix8I_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
 void M32Mix16I(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	const int16_t *base = (int16_t *)sc->SmpOffs->Data;
-	const int16_t *smp = base + sc->SampleOffset;
+	const int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -226,13 +231,13 @@ void M32Mix16I(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Mix16I_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
 void M32Mix8IS(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	const int8_t *base = (int8_t *)sc->SmpOffs->Data;
-	const int8_t *smp = base + sc->SampleOffset;
+	const int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -249,13 +254,13 @@ void M32Mix8IS(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Mix8IS_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
 void M32Mix16IS(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	const int16_t *base = (int16_t *)sc->SmpOffs->Data;
-	const int16_t *smp = base + sc->SampleOffset;
+	const int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -272,5 +277,5 @@ void M32Mix16IS(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Mix16IS_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }

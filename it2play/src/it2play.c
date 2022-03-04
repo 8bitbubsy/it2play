@@ -16,15 +16,14 @@
 #define DEFAULT_WAVRENDER_MODE_FLAG false
 
 // defaults when not overriden by argument switches
-#define DEFAULT_MIX_FREQ_SB 45454
-#define DEFAULT_MIX_FREQ_WAVWRITER 44100
+#define DEFAULT_MIX_FREQ 44100
 
 #define DEFAULT_MIX_BUFSIZE 1024
-#define DEFAULT_DRIVER DRIVER_SB16MMX
+#define DEFAULT_DRIVER DRIVER_HQ
 
 static bool customMixFreqSet = false;
 static bool renderToWavFlag = DEFAULT_WAVRENDER_MODE_FLAG;
-static int32_t mixingFrequency = DEFAULT_MIX_FREQ_SB;
+static int32_t mixingFrequency = DEFAULT_MIX_FREQ;
 static int32_t mixingBufferSize = DEFAULT_MIX_BUFSIZE;
 static int32_t IT2SoundDriver = DEFAULT_DRIVER;
 
@@ -83,14 +82,6 @@ int main(int argc, char *argv[])
 	handleArguments(argc, argv);
 #endif
 
-	if (!customMixFreqSet)
-	{
-		if (IT2SoundDriver == DRIVER_WAVWRITER)
-			mixingFrequency = DEFAULT_MIX_FREQ_WAVWRITER;
-		else
-			mixingFrequency = DEFAULT_MIX_FREQ_SB;
-	}
-
 	if (!Music_Init(mixingFrequency, mixingBufferSize, IT2SoundDriver))
 	{
 		Music_Close();
@@ -136,8 +127,8 @@ int main(int argc, char *argv[])
 	printf("Mixing frequency: %dHz\n", mixingFrequency);
 	printf("IT2 sound driver: %s\n",
 		(IT2SoundDriver == DRIVER_WAVWRITER) ? "WAV writer (v2.15/registered)" :
-		(IT2SoundDriver == DRIVER_SB16MMX)   ? "SB16 MMX"   :
-		(IT2SoundDriver == DRIVER_SB16)      ? "SB16"       : "Unknown");
+		(IT2SoundDriver == DRIVER_SB16MMX)   ? "SB16 MMX" :
+		(IT2SoundDriver == DRIVER_SB16)      ? "SB16"    : "8bb's custom driver w/ stereo sample support");
 	printf("\n");
 	printf("Status:\n");
 
@@ -205,13 +196,16 @@ static void showUsage(void)
 	printf("\n");
 	printf("  Options:\n");
 	printf("    input_module      Specifies the IT module file to load\n");
-	printf("    -f hz             Specifies the mixing frequency (16000..64000)\n");
+	printf("    -f hz             Specifies the mixing frequency (8000..64000).\n");
+	printf("                      (HQ driver suports 8000..768000).\n");
+	printf("                      If no frequency is specificed, 48000 will be used.\n");
 	printf("    -b buffersize     Specifies the mixing buffer size (256..8192)\n");
 	printf("    -d driver         Specifies what IT2 driver to use. Available choices are:\n");
-	printf("                         SB16      (Sound Blaster 16)\n");
-	printf("                         SB16MMX   (Sound Blaster 16 MMX, has filters + volramp)\n");
-	printf("                         WAVWRITER (WAV writer, has filters + volramp)\n");
-	printf("                      If no driver is specificed, SB16MMX will be used.\n");
+	printf("                         HQ        (8bb's driver w/ support for stereo samples)\n");
+	printf("                         SB16      (Sound Blaster 16, no filters/ramping)\n");
+	printf("                         SB16MMX   (Sound Blaster 16 MMX)\n");
+	printf("                         WAVWRITER (IT2.15 WAV writer)\n");
+	printf("                      If no driver is specificed, HQ will be used.\n");
 	printf("    --render-to-wav   Renders song to WAV instead of playing it. The output\n");
 	printf("                      filename will be the input filename with .WAV added to the\n");
 	printf("                      end.\n");
@@ -228,7 +222,7 @@ static void handleArguments(int argc, char *argv[])
 			if (!_stricmp(argv[i], "-f") && i+1 < argc)
 			{
 				const int32_t num = atoi(argv[i+1]);
-				mixingFrequency = CLAMP(num, 16000, 64000);
+				mixingFrequency = CLAMP(num, 8000, 768000);
 				customMixFreqSet = true;
 			}
 			else if (!_stricmp(argv[i], "-b") && i+1 < argc)
@@ -238,7 +232,8 @@ static void handleArguments(int argc, char *argv[])
 			}
 			else if (!_stricmp(argv[i], "-d") && i+1 < argc)
 			{
-				     if (!_stricmp(argv[i+1], "SB16"))      IT2SoundDriver = DRIVER_SB16;
+				     if (!_stricmp(argv[i+1], "HQ"))        IT2SoundDriver = DRIVER_HQ;
+				else if (!_stricmp(argv[i+1], "SB16"))      IT2SoundDriver = DRIVER_SB16;
 				else if (!_stricmp(argv[i+1], "SB16MMX"))   IT2SoundDriver = DRIVER_SB16MMX;
 				else if (!_stricmp(argv[i+1], "WAVWRITER")) IT2SoundDriver = DRIVER_WAVWRITER;
 			}

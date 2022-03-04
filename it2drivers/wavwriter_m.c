@@ -1,7 +1,3 @@
-/*
-** ---- "WAV writer" (IT2.15 registered) driver ----
-*/
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
@@ -9,6 +5,11 @@
 #include "../it_music.h"
 #include "wavwriter.h"
 #include "wavwriter_m.h"
+
+static void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void Mix32Stereo16Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void Mix32Surround8Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void Mix32Surround16Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 
 #define Get8BitWaveForm \
 	fSample = IT2_Cubic8(base, smp, sc->SmpError); \
@@ -230,11 +231,11 @@ static inline float IT2_Cubic16(int16_t *base, int16_t *smp, int32_t frac)
 	return b;
 }
 
-void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int8_t *base = (int8_t *)s->Data;
-	int8_t *smp = base + sc->SampleOffset;
+	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 	float f1, f2, fSample;
 
@@ -250,14 +251,14 @@ void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		Mix32Stereo8Bit_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void Mix32Stereo16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void Mix32Stereo16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int16_t *base = (int16_t *)s->Data;
-	int16_t *smp = base + sc->SampleOffset;
+	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 	float f1, f2, fSample;
 
@@ -273,14 +274,14 @@ void Mix32Stereo16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		Mix32Stereo16Bit_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void Mix32Surround8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void Mix32Surround8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int8_t *base = (int8_t *)s->Data;
-	int8_t *smp = base + sc->SampleOffset;
+	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 	float f1, f2, fSample;
 
@@ -298,14 +299,14 @@ void Mix32Surround8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 	LastRightValue = -LastLeftValue;
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void Mix32Surround16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void Mix32Surround16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int16_t *base = (int16_t *)s->Data;
-	int16_t *smp = base + sc->SampleOffset;
+	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 	float f1, f2, fSample;
 
@@ -323,5 +324,5 @@ void Mix32Surround16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 	LastRightValue = -LastLeftValue;
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }

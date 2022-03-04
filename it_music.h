@@ -18,6 +18,8 @@ enum
 	MIDICOMMAND_CHANGEPITCH   = 0xFFFF
 };
 
+// 8bb: 31 is possible through initial tempo (but 32 is general minimum)
+#define LOWEST_BPM_POSSIBLE 31
 
 #define MIX_FRAC_BITS 16
 #define MIX_FRAC_MASK ((1 << MIX_FRAC_BITS)-1)
@@ -31,12 +33,22 @@ enum
 // Read "audiodrivers/how_to_write_drivers.txt"
 #endif
 
+/* 8bb:
+** Amount of extra bytes to allocate for every instrument sample,
+** this is used for a hack for resampling interpolation to be
+** branchless in the inner channel mixer loop.
+** Warning: Do not change this!
+*/
+#define SMP_DAT_OFFSET 16
+#define SAMPLE_PAD_LENGTH (SMP_DAT_OFFSET+16)
+
 // IT2 AUDIO DRIVERS
 enum
 {
-	DRIVER_SB16MMX = 0,
-	DRIVER_SB16 = 1,
-	DRIVER_WAVWRITER = 2
+	DRIVER_HQ = 0, // high-quality custom driver by 8bitbubsy
+	DRIVER_SB16MMX = 1,
+	DRIVER_SB16 = 2,
+	DRIVER_WAVWRITER = 3
 };
 
 // 8bb: globalized
@@ -73,6 +85,7 @@ void Music_PrepareWAVRender(void); // 8bb: added this
 void Music_InitTempo(void);
 
 bool Music_AllocateSample(uint32_t sample, uint32_t length);
+bool Music_AllocateRightSample(uint32_t sample, uint32_t length); // 8bb: added this
 void Music_ReleaseSample(uint32_t sample);
 void Music_ReleaseAllSamples(void);
 

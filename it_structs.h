@@ -139,6 +139,9 @@ typedef struct smp_t
 	uint32_t Length, LoopBeg, LoopEnd, C5Speed, SusLoopBeg, SusLoopEnd, OffsetInFile;
 	uint8_t ViS, ViD, ViR, ViT;
 	void *Data;
+
+	// 8bb: added this for custom HQ driver
+	void *OrigData, *DataR, *OrigDataR;
 } sample_t;
 
 typedef struct hostChn_t
@@ -177,7 +180,6 @@ typedef struct slaveChn_t
 	uint8_t FV, Vol, VS, CVl, SVl, FP;
 	uint16_t FadeOut;
 	uint8_t DCT, DCA, Pan, PS;
-	int32_t OldSampleOffset;
 	instrument_t *InsOffs;
 	uint8_t Nte, Ins;
 	sample_t *SmpOffs;
@@ -188,7 +190,7 @@ typedef struct slaveChn_t
 	int32_t LoopBeg, LoopEnd;
 	uint32_t SmpError;
 	uint16_t vol16Bit;
-	int32_t SampleOffset;
+	int32_t SamplingPosition;
 	envState_t VEnvState;
 	int32_t filtera;
 	envState_t PEnvState;
@@ -200,7 +202,12 @@ typedef struct slaveChn_t
 	uint32_t Delta;
 	int32_t OldSamples[2];
 	int32_t DestVolL, DestVolR, CurrVolL, CurrVolR; // 8bb: ramp
-	float fOldSamples[2], fFiltera, fFilterb, fFilterc;
+	float fOldSamples[4], fFiltera, fFilterb, fFilterc;
+
+	// 8bb: for custom HQ mixer
+	float fOldLeftVolume, fOldRightVolume, fLeftVolume, fRightVolume;
+	float fDestVolL, fDestVolR, fCurrVolL, fCurrVolR;
+	uint64_t Frac64, Delta64;
 } slaveChn_t;
 
 typedef struct it_header_t
@@ -213,12 +220,13 @@ typedef struct it_header_t
 	uint8_t ChnlPan[MAX_HOST_CHANNELS], ChnlVol[MAX_HOST_CHANNELS];
 } it_header_t;
 
-typedef struct
+typedef struct // 8bb: custom struct
 {
 	bool StartNoRamp; // 8bb: for "WAV writer" driver
 	uint8_t Type, Flags, FilterParameters[128];
-	int32_t BytesToMix, Delta;
 	uint32_t MixMode, MixSpeed;
+	int32_t Delta;
+	int64_t Delta64;
 	float QualityFactorTable[128], FreqParameterMultiplier, FreqMultiplier;
 } driver_t;
 

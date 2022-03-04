@@ -171,13 +171,29 @@ bool LoadS3M(MEMFILE *m)
 		{
 			if (s->OffsetInFile != 0) // 8bb: added this check
 			{
+				bool Stereo = !!(s->Flags & SMPF_STEREO); // 8bb: added stereo support for custom HQ driver
 				bool Sample16Bit = !!(s->Flags & SMPF_16BIT);
 
 				uint32_t SampleBytes = s->Length << Sample16Bit;
 
-				if (!Music_AllocateSample(i, SampleBytes)) return false;
+				if (!Music_AllocateSample(i, SampleBytes))
+					return false;
+
+				if (Stereo)
+				{
+					if (!Music_AllocateRightSample(i, SampleBytes))
+						return false;
+				}
+
 				mseek(m, s->OffsetInFile, SEEK_SET);
-				if (!ReadBytes(m, s->Data, SampleBytes)) return false;
+				if (!ReadBytes(m, s->Data, SampleBytes))
+					return false;
+
+				if (Stereo)
+				{
+					if (!ReadBytes(m, s->DataR, SampleBytes))
+						return false;
+				}
 
 				if (!Sample16Bit)
 				{
@@ -185,16 +201,30 @@ bool LoadS3M(MEMFILE *m)
 					int8_t *Ptr8 = (int8_t *)s->Data;
 					for (uint32_t j = 0; j < s->Length; j++)
 						Ptr8[j] ^= 0x80;
+
+					if (Stereo)
+					{
+						Ptr8 = (int8_t *)s->DataR;
+						for (uint32_t j = 0; j < s->Length; j++)
+							Ptr8[j] ^= 0x80;
+					}
 				}
 				else
 				{
-					// 8bb: Music_AllocateSample() also set s->Length, divide by two if 16-bit 
+					// 8bb: Music_AllocateSample() also set s->Length, divide by two if 16-bit
 					s->Length >>= 1;
 
 					// 8bb: convert from unsigned to signed
 					int16_t *Ptr16 = (int16_t *)s->Data;
 					for (uint32_t j = 0; j < s->Length; j++)
 						Ptr16[j] ^= 0x8000;
+
+					if (Stereo)
+					{
+						Ptr16 = (int16_t *)s->DataR;
+						for (uint32_t j = 0; j < s->Length; j++)
+							Ptr16[j] ^= 0x8000;
+					}
 				}
 			}
 		}

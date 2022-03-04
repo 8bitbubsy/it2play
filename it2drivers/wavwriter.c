@@ -15,7 +15,7 @@
 #include "zerovol.h"
 
 static uint16_t MixVolume;
-static int32_t *MixBuffer, MixTransferRemaining, MixTransferOffset;
+static int32_t BytesToMix, RealBytesToMix, *MixBuffer, MixTransferRemaining, MixTransferOffset;
 static int32_t LastClickRemovalLeft, LastClickRemovalRight, LeftDitherValue, RightDitherValue;
 static uint64_t BytesToMixFractional, CurrentFractional;
 
@@ -23,7 +23,7 @@ void WAVWriter_MixSamples(void)
 {
 	MixTransferOffset = 0;
 
-	int32_t RealBytesToMix = Driver.BytesToMix;
+	RealBytesToMix = BytesToMix;
 
 	/* 8bb:
 	** IT2 attempts to handle the fractional part of BytesToMix here,
@@ -169,8 +169,6 @@ void WAVWriter_MixSamples(void)
 			}
 		}
 
-		sc->OldSampleOffset = sc->SampleOffset;
-
 		if (sc->Delta == 0) // 8bb: added this protection just in case (shouldn't happen)
 			continue;
 
@@ -181,7 +179,7 @@ void WAVWriter_MixSamples(void)
 		uint32_t MixBlockSize = RealBytesToMix;
 
 		// 8bb: don't ramp volume at start of sample (if enabled)
-		if (Driver.StartNoRamp && (sc->Flags & SF_NEW_NOTE) && sc->SampleOffset == 0)
+		if (Driver.StartNoRamp && (sc->Flags & SF_NEW_NOTE) && sc->SamplingPosition == 0)
 		{
 			sc->OldLeftVolume = sc->LeftVolume;
 			sc->OldRightVolume = sc->RightVolume;
@@ -258,7 +256,7 @@ void WAVWriter_MixSamples(void)
 						uint32_t SamplesToMix;
 						if (sc->LpD == DIR_BACKWARDS)
 						{
-							SamplesToMix = sc->SampleOffset - (sc->LoopBeg + 1);
+							SamplesToMix = sc->SamplingPosition - (sc->LoopBeg + 1);
 							if (SamplesToMix > UINT16_MAX) // 8bb: added this to turn 64-bit div into 32-bit div (faster)
 								SamplesToMix = UINT16_MAX;
 
@@ -267,7 +265,7 @@ void WAVWriter_MixSamples(void)
 						}
 						else // 8bb: forwards
 						{
-							SamplesToMix = (sc->LoopEnd - 1) - sc->SampleOffset;
+							SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 							if (SamplesToMix > UINT16_MAX)
 								SamplesToMix = UINT16_MAX;
 
@@ -285,34 +283,34 @@ void WAVWriter_MixSamples(void)
 
 						if (sc->LpD == DIR_BACKWARDS)
 						{
-							if (sc->SampleOffset <= sc->LoopBeg)
+							if (sc->SamplingPosition <= sc->LoopBeg)
 							{
-								NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SampleOffset) % (LoopLength << 1);
+								NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SamplingPosition) % (LoopLength << 1);
 								if (NewLoopPos >= LoopLength)
 								{
-									sc->SampleOffset = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
+									sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
 								}
 								else
 								{
 									sc->LpD = DIR_FORWARDS;
-									sc->SampleOffset = sc->LoopBeg + NewLoopPos;
+									sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
 									sc->SmpError = (uint16_t)(0 - sc->SmpError);
 								}
 							}
 						}
 						else // 8bb: forwards
 						{
-							if ((uint32_t)sc->SampleOffset >= (uint32_t)sc->LoopEnd)
+							if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 							{
-								NewLoopPos = (uint32_t)(sc->SampleOffset - sc->LoopEnd) % (LoopLength << 1);
+								NewLoopPos = (uint32_t)(sc->SamplingPosition - sc->LoopEnd) % (LoopLength << 1);
 								if (NewLoopPos >= LoopLength)
 								{
-									sc->SampleOffset = sc->LoopBeg + (NewLoopPos - LoopLength);
+									sc->SamplingPosition = sc->LoopBeg + (NewLoopPos - LoopLength);
 								}
 								else
 								{
 									sc->LpD = DIR_BACKWARDS;
-									sc->SampleOffset = (sc->LoopEnd - 1) - NewLoopPos;
+									sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
 									sc->SmpError = (uint16_t)(0 - sc->SmpError);
 								}
 							}
@@ -323,7 +321,7 @@ void WAVWriter_MixSamples(void)
 				{
 					while (MixBlockSize > 0)
 					{
-						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SampleOffset;
+						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 						if (SamplesToMix > UINT16_MAX)
 							SamplesToMix = UINT16_MAX;
 
@@ -337,15 +335,15 @@ void WAVWriter_MixSamples(void)
 						MixBlockSize -= SamplesToMix;
 						MixBufferPtr += SamplesToMix << 1;
 
-						if ((uint32_t)sc->SampleOffset >= (uint32_t)sc->LoopEnd)
-							sc->SampleOffset = sc->LoopBeg + ((uint32_t)(sc->SampleOffset - sc->LoopEnd) % LoopLength);
+						if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
+							sc->SamplingPosition = sc->LoopBeg + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 					}
 				}
 				else // 8bb: no loop
 				{
 					while (MixBlockSize > 0)
 					{
-						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SampleOffset;
+						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 						if (SamplesToMix > UINT16_MAX)
 							SamplesToMix = UINT16_MAX;
 
@@ -359,7 +357,7 @@ void WAVWriter_MixSamples(void)
 						MixBlockSize -= SamplesToMix;
 						MixBufferPtr += SamplesToMix << 1;
 
-						if ((uint32_t)sc->SampleOffset >= (uint32_t)sc->LoopEnd)
+						if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 						{
 							sc->Flags = SF_NOTE_STOP;
 							if (!(sc->HCN & CHN_DISOWNED))
@@ -383,6 +381,7 @@ void WAVWriter_MixSamples(void)
 								R -= RSub;
 							}
 
+							// 8bb: update anti-click value for next mixing session
 							LastClickRemovalLeft  += L;
 							LastClickRemovalRight += R;
 
@@ -405,8 +404,8 @@ void WAVWriter_MixSamples(void)
 
 void WAVWriter_SetTempo(uint8_t Tempo)
 {
-	assert(Tempo >= 31);
-	Driver.BytesToMix = ((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) / Tempo;
+	assert(Tempo >= LOWEST_BPM_POSSIBLE);
+	BytesToMix = ((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) / Tempo;
 
 	/* 8bb:
 	** IT2 calculates the fractional part of "bytes to mix" here,
@@ -434,9 +433,10 @@ void WAVWriter_ResetMixer(void) // 8bb: added this
 	LeftDitherValue = RightDitherValue = 0;
 }
 
-void WAVWriter_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: added this
+int32_t WAVWriter_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: added this
 {
-	for (int32_t i = 0; i < SamplesToOutput; i++)
+	int32_t SamplesTodo = (SamplesToOutput == 0) ? RealBytesToMix : SamplesToOutput;
+	for (int32_t i = 0; i < SamplesTodo; i++)
 	{
 		LeftDitherValue  += MixBuffer[MixTransferOffset++];
 		RightDitherValue += MixBuffer[MixTransferOffset++];
@@ -460,6 +460,8 @@ void WAVWriter_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: add
 		*AudioOut16++ = (int16_t)L;
 		*AudioOut16++ = (int16_t)R;
 	}
+
+	return SamplesTodo;
 }
 
 void WAVWriter_Mix(int32_t numSamples, int16_t *audioOut) // 8bb: added this (original SB16 MMX driver uses IRQ callback)
@@ -471,7 +473,7 @@ void WAVWriter_Mix(int32_t numSamples, int16_t *audioOut) // 8bb: added this (or
 		{
 			Update();
 			WAVWriter_MixSamples();
-			MixTransferRemaining = Driver.BytesToMix;
+			MixTransferRemaining = RealBytesToMix;
 		}
 
 		int32_t SamplesToTransfer = SamplesLeft;
@@ -511,15 +513,15 @@ void WAVWriter_FixSamples(void)
 			{
 				if (s->Flags & SMPF_LOOP_PINGPONG)
 				{
-					int32_t End = s->LoopEnd - 1;
-					if (End < 0)
-						End = 0;
+					int32_t LastSample = s->LoopEnd - 1;
+					if (LastSample < 0)
+						LastSample = 0;
 
-					Data16[s->LoopEnd+0] = Data16[End-0];
-					if (End > 0)
-						Data16[s->LoopEnd+1] = Data16[End-1];
+					Data16[s->LoopEnd+0] = Data16[LastSample];
+					if (LastSample > 0)
+						Data16[s->LoopEnd+1] = Data16[LastSample-1];
 					else
-						Data16[s->LoopEnd+1] = Data16[End-0];
+						Data16[s->LoopEnd+1] = Data16[LastSample];
 				}
 				else
 				{
@@ -543,15 +545,15 @@ void WAVWriter_FixSamples(void)
 			{
 				if (s->Flags & SMPF_LOOP_PINGPONG)
 				{
-					int32_t End = s->LoopEnd - 1;
-					if (End < 0)
-						End = 0;
+					int32_t LastSample = s->LoopEnd - 1;
+					if (LastSample < 0)
+						LastSample = 0;
 
-					Data8[s->LoopEnd+0] = Data8[End-0];
-					if (End > 0)
-						Data8[s->LoopEnd+1] = Data8[End-1];
+					Data8[s->LoopEnd+0] = Data8[LastSample];
+					if (LastSample > 0)
+						Data8[s->LoopEnd+1] = Data8[LastSample-1];
 					else
-						Data8[s->LoopEnd+1] = Data8[End-0];
+						Data8[s->LoopEnd+1] = Data8[LastSample];
 				}
 				else
 				{
@@ -570,13 +572,12 @@ void WAVWriter_FixSamples(void)
 
 bool WAVWriter_InitSound(int32_t mixingFrequency)
 {
-	if (mixingFrequency < 16000)
-		mixingFrequency = 16000;
+	if (mixingFrequency < 8000)
+		mixingFrequency = 8000;
 	else if (mixingFrequency > 64000)
 		mixingFrequency = 64000;
 
-	const int32_t LowestTempo = 31; // 8bb: 31 is possible through initial tempo (but 32 is general minimum)
-	const int32_t MaxSamplesToMix = (((mixingFrequency << 1) + (mixingFrequency >> 1)) / LowestTempo) + 1;
+	const int32_t MaxSamplesToMix = (((mixingFrequency << 1) + (mixingFrequency >> 1)) / LOWEST_BPM_POSSIBLE) + 1;
 
 	MixBuffer = (int32_t *)malloc(MaxSamplesToMix * 2 * sizeof (int32_t));
 	if (MixBuffer == NULL)

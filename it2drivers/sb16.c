@@ -13,13 +13,13 @@
 #include "zerovol.h"
 
 static uint16_t MixVolume;
-static int32_t *MixBuffer, MixTransferRemaining, MixTransferOffset;
+static int32_t BytesToMix, *MixBuffer, MixTransferRemaining, MixTransferOffset;
 
 void SB16_MixSamples(void)
 {
 	MixTransferOffset = 0;
 
-	memset(MixBuffer, 0, Driver.BytesToMix * 2 * sizeof (int32_t));
+	memset(MixBuffer, 0, BytesToMix * 2 * sizeof (int32_t));
 
 	slaveChn_t *sc = sChn;
 	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
@@ -70,12 +70,10 @@ void SB16_MixSamples(void)
 			}
 		}
 
-		sc->OldSampleOffset = sc->SampleOffset;
-
 		if (sc->Delta == 0) // 8bb: added this protection just in case (shouldn't happen)
 			continue;
 
-		uint32_t MixBlockSize = Driver.BytesToMix;
+		uint32_t MixBlockSize = BytesToMix;
 		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // 8bb: also length for non-loopers
 
 		if ((sc->Flags & SF_CHN_MUTED) || (sc->LeftVolume == 0 && sc->RightVolume == 0))
@@ -111,34 +109,34 @@ void SB16_MixSamples(void)
 					uint32_t NewLoopPos;
 					if (sc->LpD == DIR_BACKWARDS)
 					{
-						if (sc->SampleOffset <= sc->LoopBeg)
+						if (sc->SamplingPosition <= sc->LoopBeg)
 						{
-							NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SampleOffset) % (LoopLength << 1);
+							NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SamplingPosition) % (LoopLength << 1);
 							if (NewLoopPos >= LoopLength)
 							{
-								sc->SampleOffset = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
+								sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
 							}
 							else
 							{
 								sc->LpD = DIR_FORWARDS;
-								sc->SampleOffset = sc->LoopBeg + NewLoopPos;
+								sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
 								sc->SmpError = (uint16_t)(0 - sc->SmpError);
 							}
 						}
 					}
 					else // 8bb: forwards
 					{
-						if ((uint32_t)sc->SampleOffset >= (uint32_t)sc->LoopEnd)
+						if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 						{
-							NewLoopPos = (uint32_t)(sc->SampleOffset - sc->LoopEnd) % (LoopLength << 1);
+							NewLoopPos = (uint32_t)(sc->SamplingPosition - sc->LoopEnd) % (LoopLength << 1);
 							if (NewLoopPos >= LoopLength)
 							{
-								sc->SampleOffset = sc->LoopBeg + (NewLoopPos - LoopLength);
+								sc->SamplingPosition = sc->LoopBeg + (NewLoopPos - LoopLength);
 							}
 							else
 							{
 								sc->LpD = DIR_BACKWARDS;
-								sc->SampleOffset = (sc->LoopEnd - 1) - NewLoopPos;
+								sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
 								sc->SmpError = (uint16_t)(0 - sc->SmpError);
 							}
 						}
@@ -147,7 +145,7 @@ void SB16_MixSamples(void)
 					uint32_t SamplesToMix;
 					if (sc->LpD == DIR_BACKWARDS)
 					{
-						SamplesToMix = sc->SampleOffset - (sc->LoopBeg + 1);
+						SamplesToMix = sc->SamplingPosition - (sc->LoopBeg + 1);
 						if (SamplesToMix > UINT16_MAX) // 8bb: added this to turn 64-bit div into 32-bit div (faster)
 							SamplesToMix = UINT16_MAX;
 
@@ -156,7 +154,7 @@ void SB16_MixSamples(void)
 					}
 					else // 8bb: forwards
 					{
-						SamplesToMix = (sc->LoopEnd - 1) - sc->SampleOffset;
+						SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 						if (SamplesToMix > UINT16_MAX)
 							SamplesToMix = UINT16_MAX;
 
@@ -177,10 +175,10 @@ void SB16_MixSamples(void)
 			{
 				while (MixBlockSize > 0)
 				{
-					if ((uint32_t)sc->SampleOffset >= (uint32_t)sc->LoopEnd)
-						sc->SampleOffset = sc->LoopBeg + ((uint32_t)(sc->SampleOffset - sc->LoopEnd) % LoopLength);
+					if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
+						sc->SamplingPosition = sc->LoopBeg + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 
-					uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SampleOffset;
+					uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 					if (SamplesToMix > UINT16_MAX)
 						SamplesToMix = UINT16_MAX;
 
@@ -199,7 +197,7 @@ void SB16_MixSamples(void)
 			{
 				while (MixBlockSize > 0)
 				{
-					if ((uint32_t)sc->SampleOffset >= (uint32_t)sc->LoopEnd) // 8bb: LoopEnd = sample end, even for non-loopers
+					if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd) // 8bb: LoopEnd = sample end, even for non-loopers
 					{
 						sc->Flags = SF_NOTE_STOP;
 						if (!(sc->HCN & CHN_DISOWNED))
@@ -208,7 +206,7 @@ void SB16_MixSamples(void)
 						break;
 					}
 
-					uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SampleOffset;
+					uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 					if (SamplesToMix > UINT16_MAX)
 						SamplesToMix = UINT16_MAX;
 
@@ -233,8 +231,8 @@ void SB16_MixSamples(void)
 
 void SB16_SetTempo(uint8_t Tempo)
 {
-	assert(Tempo >= 31);
-	Driver.BytesToMix = ((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) / Tempo;
+	assert(Tempo >= LOWEST_BPM_POSSIBLE);
+	BytesToMix = ((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) / Tempo;
 }
 
 void SB16_SetMixVolume(uint8_t vol)
@@ -249,12 +247,13 @@ void SB16_ResetMixer(void) // 8bb: added this
 	MixTransferOffset = 0;
 }
 
-void SB16_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: added this
+int32_t SB16_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: added this
 {
 	// 8bb: we add +1 here to match WAV-writer gain (and OpenMPT)
 	const uint8_t SampleShiftValue = (Song.Header.Flags & ITF_STEREO) ? (13+1) : (14+1);
 
-	for (int32_t i = 0; i < SamplesToOutput * 2; i++)
+	int32_t SamplesTodo = (SamplesToOutput == 0) ? BytesToMix : SamplesToOutput;
+	for (int32_t i = 0; i < SamplesTodo * 2; i++)
 	{
 		int32_t Sample = MixBuffer[MixTransferOffset++] >> SampleShiftValue;
 
@@ -265,6 +264,8 @@ void SB16_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: added th
 
 		*AudioOut16++ = (int16_t)Sample;
 	}
+
+	return SamplesTodo;
 }
 
 void SB16_Mix(int32_t numSamples, int16_t *audioOut) // 8bb: added this (original SB16 driver uses IRQ callback)
@@ -276,7 +277,7 @@ void SB16_Mix(int32_t numSamples, int16_t *audioOut) // 8bb: added this (origina
 		{
 			Update();
 			SB16_MixSamples();
-			MixTransferRemaining = Driver.BytesToMix;
+			MixTransferRemaining = BytesToMix;
 		}
 
 		int32_t SamplesToTransfer = SamplesLeft;
@@ -348,13 +349,12 @@ void SB16_FixSamples(void)
 
 bool SB16_InitSound(int32_t mixingFrequency)
 {
-	if (mixingFrequency < 16000)
-		mixingFrequency = 16000;
+	if (mixingFrequency < 8000)
+		mixingFrequency = 8000;
 	else if (mixingFrequency > 64000)
 		mixingFrequency = 64000;
 
-	const int32_t LowestTempo = 31; // 8bb: 31 is possible through initial tempo (but 32 is general minimum)
-	const int32_t MaxSamplesToMix = (((mixingFrequency << 1) + (mixingFrequency >> 1)) / LowestTempo) + 1;
+	const int32_t MaxSamplesToMix = (((mixingFrequency << 1) + (mixingFrequency >> 1)) / LOWEST_BPM_POSSIBLE) + 1;
 
 	MixBuffer = (int32_t *)malloc(MaxSamplesToMix * 2 * sizeof (int32_t));
 	if (MixBuffer == NULL)

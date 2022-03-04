@@ -1,13 +1,18 @@
-/*
-** ---- SB16 MMX IT2 driver (mixing code) ----
-*/
-
 #include <stdint.h>
 #include <stdbool.h>
 #include "../it_structs.h"
 #include "../it_music.h"
 #include "sb16mmx.h"
 #include "sb16mmx_m.h"
+
+static void M32Bit8M(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Bit16M(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Bit8MI(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Bit16MI(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Bit8MV(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Bit16MV(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Bit8MF(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
+static void M32Bit16MF(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 
 #define Get8BitWaveForm \
 	frac = sc->SmpError >> 1; \
@@ -185,11 +190,11 @@ const mixFunc SB16MMX_MixFunctionTables[8] =
 	(mixFunc)M32Bit16MF
 };
 
-void M32Bit8M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void M32Bit8M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int8_t *base = (int8_t *)s->Data;
-	int8_t *smp = base + sc->SampleOffset;
+	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -206,14 +211,14 @@ void M32Bit8M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Bit8M_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void M32Bit16M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void M32Bit16M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int16_t *base = (int16_t *)s->Data;
-	int16_t *smp = base + sc->SampleOffset;
+	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -230,14 +235,14 @@ void M32Bit16M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Bit16M_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void M32Bit8MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void M32Bit8MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int8_t *base = (int8_t *)s->Data;
-	int8_t *smp = base + sc->SampleOffset;
+	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -254,14 +259,14 @@ void M32Bit8MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Bit8MI_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void M32Bit16MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void M32Bit16MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int16_t *base = (int16_t *)s->Data;
-	int16_t *smp = base + sc->SampleOffset;
+	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
 
 	for (int32_t i = 0; i < (NumSamples & 3); i++)
@@ -278,16 +283,16 @@ void M32Bit16MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Bit16MI_M
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
 // 8bb: ramped mixers need to be done slightly differently for the ramping to be sample-accurate
 
-void M32Bit8MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void M32Bit8MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int8_t *base = (int8_t *)s->Data;
-	int8_t *smp = base + sc->SampleOffset;
+	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
 
 	if (NumSamples & 1)
@@ -307,14 +312,14 @@ void M32Bit8MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Bit8MV_M2
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void M32Bit16MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void M32Bit16MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int16_t *base = (int16_t *)s->Data;
-	int16_t *smp = base + sc->SampleOffset;
+	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
 
 	if (NumSamples & 1)
@@ -334,14 +339,14 @@ void M32Bit16MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Bit16MV_M2
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void M32Bit8MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void M32Bit8MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int8_t *base = (int8_t *)s->Data;
-	int8_t *smp = base + sc->SampleOffset;
+	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
 
 	if (NumSamples & 1)
@@ -361,14 +366,14 @@ void M32Bit8MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Bit8MF_M2
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }
 
-void M32Bit16MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
+static void M32Bit16MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
 	int16_t *base = (int16_t *)s->Data;
-	int16_t *smp = base + sc->SampleOffset;
+	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
 
 	if (NumSamples & 1)
@@ -388,5 +393,5 @@ void M32Bit16MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 		M32Bit16MF_M2
 	}
 
-	sc->SampleOffset = (int32_t)(smp - base);
+	sc->SamplingPosition = (int32_t)(smp - base);
 }

@@ -15,7 +15,7 @@ void UpdateNoLoop(slaveChn_t *sc, uint32_t numSamples)
 {
 	const uint64_t SamplesToMix = (uint64_t)sc->Delta * (uint32_t)numSamples;
 
-	uint32_t SampleOffset = sc->SampleOffset + (uint32_t)(SamplesToMix >> MIX_FRAC_BITS);
+	uint32_t SampleOffset = sc->SamplingPosition + (uint32_t)(SamplesToMix >> MIX_FRAC_BITS);
 	sc->SmpError += SamplesToMix & MIX_FRAC_MASK;
 	SampleOffset += (uint32_t)sc->SmpError >> MIX_FRAC_BITS;
 	sc->SmpError &= MIX_FRAC_MASK;
@@ -30,7 +30,7 @@ void UpdateNoLoop(slaveChn_t *sc, uint32_t numSamples)
 		}
 	}
 
-	sc->SampleOffset = SampleOffset;
+	sc->SamplingPosition = SampleOffset;
 }
 
 void UpdateForwardsLoop(slaveChn_t *sc, uint32_t numSamples)
@@ -38,17 +38,17 @@ void UpdateForwardsLoop(slaveChn_t *sc, uint32_t numSamples)
 	const uint64_t SamplesToMix = (uint64_t)sc->Delta * (uint32_t)numSamples;
 
 	sc->SmpError += SamplesToMix & MIX_FRAC_MASK;
-	sc->SampleOffset += sc->SmpError >> MIX_FRAC_BITS;
-	sc->SampleOffset += (uint32_t)(SamplesToMix >> MIX_FRAC_BITS);
+	sc->SamplingPosition += sc->SmpError >> MIX_FRAC_BITS;
+	sc->SamplingPosition += (uint32_t)(SamplesToMix >> MIX_FRAC_BITS);
 	sc->SmpError &= MIX_FRAC_MASK;
 
-	if ((uint32_t)sc->SampleOffset >= (uint32_t)sc->LoopEnd) // Reset position...
+	if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd) // Reset position...
 	{
 		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg;
 		if (LoopLength == 0)
-			sc->SampleOffset = 0;
+			sc->SamplingPosition = 0;
 		else
-			sc->SampleOffset = sc->LoopBeg + ((sc->SampleOffset - sc->LoopEnd) % LoopLength);
+			sc->SamplingPosition = sc->LoopBeg + ((sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 	}
 }
 
@@ -63,21 +63,21 @@ void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 	if (sc->LpD == DIR_BACKWARDS)
 	{
 		sc->SmpError -= FracSamples;
-		sc->SampleOffset += ((int32_t)sc->SmpError >> MIX_FRAC_BITS);
-		sc->SampleOffset -= IntSamples;
+		sc->SamplingPosition += ((int32_t)sc->SmpError >> MIX_FRAC_BITS);
+		sc->SamplingPosition -= IntSamples;
 		sc->SmpError &= MIX_FRAC_MASK;
 
-		if (sc->SampleOffset <= sc->LoopBeg)
+		if (sc->SamplingPosition <= sc->LoopBeg)
 		{
-			uint32_t NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SampleOffset) % (LoopLength << 1);
+			uint32_t NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SamplingPosition) % (LoopLength << 1);
 			if (NewLoopPos >= LoopLength)
 			{
-				sc->SampleOffset = (sc->LoopEnd - 1) + (LoopLength - NewLoopPos);
+				sc->SamplingPosition = (sc->LoopEnd - 1) + (LoopLength - NewLoopPos);
 			}
 			else
 			{
 				sc->LpD = DIR_FORWARDS;
-				sc->SampleOffset = sc->LoopBeg + NewLoopPos;
+				sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
 				sc->SmpError = (uint16_t)(0 - sc->SmpError);
 			}
 		}
@@ -85,21 +85,21 @@ void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 	else // 8bb: forwards
 	{
 		sc->SmpError += FracSamples;
-		sc->SampleOffset += sc->SmpError >> MIX_FRAC_BITS;
-		sc->SampleOffset += IntSamples;
+		sc->SamplingPosition += sc->SmpError >> MIX_FRAC_BITS;
+		sc->SamplingPosition += IntSamples;
 		sc->SmpError &= MIX_FRAC_MASK;
 
-		if ((uint32_t)sc->SampleOffset >= (uint32_t)sc->LoopEnd)
+		if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 		{
-			uint32_t NewLoopPos = (uint32_t)(sc->SampleOffset - sc->LoopEnd) % (LoopLength << 1);
+			uint32_t NewLoopPos = (uint32_t)(sc->SamplingPosition - sc->LoopEnd) % (LoopLength << 1);
 			if (NewLoopPos >= LoopLength)
 			{
-				sc->SampleOffset = sc->LoopBeg + (NewLoopPos - LoopLength);
+				sc->SamplingPosition = sc->LoopBeg + (NewLoopPos - LoopLength);
 			}
 			else
 			{
 				sc->LpD = DIR_BACKWARDS;
-				sc->SampleOffset = (sc->LoopEnd - 1) - NewLoopPos;
+				sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
 				sc->SmpError = (uint16_t)(0 - sc->SmpError);
 			}
 		}

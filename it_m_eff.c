@@ -438,8 +438,9 @@ void InitNoCommand(hostChn_t *hc)
 			hc->CP = sc->Pan = s->DfP & 127;
 	}
 
-	sc->SampleOffset = sc->OldSampleOffset = 0;
+	sc->SamplingPosition = 0;
 	sc->SmpError = 0; // 8bb: clear fractional sampling position
+	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
 	sc->Frequency = sc->FrequencySet = ((int64_t)s->C5Speed * PitchTable[hc->Nt2]) >> 16;
 
 	hcFlags |= HF_CHAN_ON;
@@ -579,7 +580,8 @@ static bool Gxx_ChangeSample(hostChn_t *hc, slaveChn_t *sc, uint8_t sample)
 	sc->ViDepth = 0;
 	sc->LpD = 0; // Reset loop direction.
 	sc->SmpError = 0; // 8bb: reset sampling position fraction
-	sc->SampleOffset = sc->OldSampleOffset = 0;
+	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
+	sc->SamplingPosition = 0;
 	sc->SVl = s->GvL * 2;
 
 	if (!(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
@@ -960,8 +962,9 @@ void InitCommandO(hostChn_t *hc)
 			offset = sc->LoopEnd - 1;
 		}
 
-		sc->SampleOffset = sc->OldSampleOffset = offset;
+		sc->SamplingPosition = offset;
 		sc->SmpError = 0; // 8bb: clear fractional sampling position
+		sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
 	}
 }
 
@@ -1639,6 +1642,7 @@ void CommandJ(hostChn_t *hc)
 
 	sc->Flags |= SF_FREQ_CHANGE;
 
+	// 8bb: used as an index to a 16-bit LUT (hence increments of 2)
 	tick += 2;
 	if (tick >= 6)
 	{
@@ -1742,9 +1746,9 @@ void CommandQ(hostChn_t *hc)
 		}
 	}
 
-	sc->OldSampleOffset = 0;
 	sc->SmpError = 0; // 8bb: clear sampling position fraction
-	sc->SampleOffset = 0;
+	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
+	sc->SamplingPosition = 0;
 
 	sc->Flags |= (SF_RECALC_FINALVOL | SF_NEW_NOTE | SF_LOOP_CHANGED);
 
@@ -1829,7 +1833,6 @@ void CommandS(hostChn_t *hc)
 
 		if ((Song.Header.ChnlPan[hc->HCN] & 0x80) && (hc->Flags & HF_CHAN_ON))
 			((slaveChn_t *)hc->SCOffst)->Flags |= SF_NEW_NOTE;
-
 	}
 	else if (SCmd == 0xC0) // Note cut.
 	{
