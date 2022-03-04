@@ -577,7 +577,8 @@ bool WAVWriter_InitSound(int32_t mixingFrequency)
 	else if (mixingFrequency > 64000)
 		mixingFrequency = 64000;
 
-	const int32_t MaxSamplesToMix = (((mixingFrequency << 1) + (mixingFrequency >> 1)) / LOWEST_BPM_POSSIBLE) + 1;
+	// 8bb: +2, make room for "RealBytesToMix" overflow addition
+	const int32_t MaxSamplesToMix = (((mixingFrequency << 1) + (mixingFrequency >> 1)) / LOWEST_BPM_POSSIBLE) + 2;
 
 	MixBuffer = (int32_t *)malloc(MaxSamplesToMix * 2 * sizeof (int32_t));
 	if (MixBuffer == NULL)

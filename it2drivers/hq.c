@@ -113,7 +113,7 @@ void HQ_MixSamples(void)
 
 		if (sc->Flags & SF_FREQ_CHANGE)
 		{
-			if ((uint32_t)sc->Frequency > INT32_MAX) // added this as my own max limit
+			if ((uint32_t)sc->Frequency > INT32_MAX) // this is my own max limit in this driver
 			{
 				sc->Flags = SF_NOTE_STOP;
 				if (!(sc->HCN & CHN_DISOWNED))
@@ -190,7 +190,7 @@ void HQ_MixSamples(void)
 			}
 		}
 
-		if (sc->Delta64 == 0)
+		if (sc->Delta64 == 0) // just in case (shouldn't happen)
 			continue;
 
 		uint32_t MixBlockSize = RealBytesToMix;
@@ -202,8 +202,7 @@ void HQ_MixSamples(void)
 		MixFunc_t Mix = HQ_MixFunctionTables[(FilterActive << 3) + (Stereo << 2) + (Surround << 1) + Sample16Bit];
 		assert(Mix != NULL);
 
-		// prepare volume ramp
-		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // also length for non-loopers
+		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // also actual length for non-loopers
 		if ((int32_t)LoopLength > 0)
 		{
 			float *fMixBufferPtr = fMixBuffer;
@@ -611,7 +610,7 @@ bool HQ_InitSound(int32_t mixingFrequency)
 	else if (mixingFrequency > 768000)
 		mixingFrequency = 768000;
 
-	const int32_t MaxSamplesToMix = (int32_t)(((mixingFrequency * 2.5) / LOWEST_BPM_POSSIBLE) + 1.0);
+	const int32_t MaxSamplesToMix = (int32_t)ceil((mixingFrequency * 2.5) / LOWEST_BPM_POSSIBLE) + 1;
 
 	fMixBuffer = (float *)malloc(MaxSamplesToMix * 2 * sizeof (float));
 	if (fMixBuffer == NULL)
