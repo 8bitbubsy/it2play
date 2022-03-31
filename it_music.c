@@ -1516,11 +1516,15 @@ static void UpdateData(void)
 					uint8_t NewPattern = Song.Orders[NewOrder]; // next pattern
 					if (NewPattern >= 200)
 					{
-						NewOrder++;
-						if (NewPattern == 0xFE)
-							continue;
-
-						Song.StopSong = true;
+						if (NewPattern == 0xFE) // 8bb: skip pattern separator
+						{
+							NewOrder++;
+						}
+						else
+						{
+							NewOrder = 0;
+							Song.StopSong = true; // 8bb: for WAV rendering
+						}
 					}
 					else
 					{
