@@ -126,9 +126,9 @@ int main(int argc, char *argv[])
 	printf("Mixing volume: %d/128\n", Song.Header.MixVolume);
 	printf("Mixing frequency: %dHz\n", mixingFrequency);
 	printf("IT2 sound driver: %s\n",
-		(IT2SoundDriver == DRIVER_WAVWRITER) ? "WAV writer (v2.15/registered)" :
+		(IT2SoundDriver == DRIVER_WAVWRITER) ? "WAV writer (v2.15 registered)" :
 		(IT2SoundDriver == DRIVER_SB16MMX)   ? "SB16 MMX" :
-		(IT2SoundDriver == DRIVER_SB16)      ? "SB16"    : "8bb's custom driver w/ stereo sample support");
+		(IT2SoundDriver == DRIVER_SB16)      ? "SB16"    : "HQ (8bb's custom driver w/ stereo sample support)");
 	printf("\n");
 	printf("Status:\n");
 
