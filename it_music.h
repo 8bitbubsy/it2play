@@ -52,6 +52,11 @@ enum
 };
 
 // 8bb: globalized
+extern void (*DriverClose)(void);
+extern void (*DriverMix)(int32_t, int16_t *);
+extern void (*DriverResetMixer)(void);
+extern int32_t (*DriverPostMix)(int16_t *, int32_t);
+extern void (*DriverMixSamples)(void);
 extern void (*DriverSetTempo)(uint8_t);
 extern void (*DriverSetMixVolume)(uint8_t);
 extern void (*DriverFixSamples)(void);

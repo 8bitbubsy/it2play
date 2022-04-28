@@ -26,7 +26,6 @@
 #include <math.h>
 #include "../it_structs.h"
 #include "../it_music.h" // Update()
-#include "hq.h"
 #include "hq_m.h"
 #include "zerovol.h"
 
@@ -67,7 +66,7 @@ static bool InitCubicSplineLUT(void)
 	return true;
 }
 
-void HQ_MixSamples(void)
+static void HQ_MixSamples(void)
 {
 	MixTransferOffset = 0;
 
@@ -95,7 +94,7 @@ void HQ_MixSamples(void)
 	//memset(fMixBuffer, 0, RealBytesToMix * 2 * sizeof (float));
 
 	slaveChn_t *sc = sChn;
-	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
+	for (uint32_t i = 0; i < Driver.NumChannels; i++, sc++)
 	{
 		if (!(sc->Flags & SF_CHAN_ON) || sc->Smp == 100)
 			continue;
@@ -340,7 +339,7 @@ void HQ_MixSamples(void)
 	}
 }
 
-void HQ_SetTempo(uint8_t Tempo)
+static void HQ_SetTempo(uint8_t Tempo)
 {
 	assert(Tempo >= LOWEST_BPM_POSSIBLE);
 
@@ -351,13 +350,13 @@ void HQ_SetTempo(uint8_t Tempo)
 	BytesToMixFractional = (int32_t)((dSamplesToMixFrac * BPM_FRAC_SCALE) + 0.5); // rounded 0.31fp
 }
 
-void HQ_SetMixVolume(uint8_t Vol)
+static void HQ_SetMixVolume(uint8_t Vol)
 {
 	MixVolume = Vol;
 	RecalculateAllVolumes();
 }
 
-void HQ_ResetMixer(void)
+static void HQ_ResetMixer(void)
 {
 	MixTransferRemaining = 0;
 	MixTransferOffset = 0;
@@ -376,7 +375,7 @@ static inline int32_t Random32(void)
 	return (int32_t)RandSeed;
 }
 
-int32_t HQ_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput)
+static int32_t HQ_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput)
 {
 	int32_t out32;
 	double dOut, dPrng;
@@ -406,7 +405,7 @@ int32_t HQ_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput)
 	return SamplesTodo;
 }
 
-void HQ_Mix(int32_t numSamples, int16_t *audioOut)
+static void HQ_Mix(int32_t numSamples, int16_t *audioOut)
 {
 	int32_t SamplesLeft = numSamples;
 	while (SamplesLeft > 0)
@@ -433,7 +432,7 @@ void HQ_Mix(int32_t numSamples, int16_t *audioOut)
 /* Fixes sample end bytes for interpolation (yes, we have room after the data).
 ** Samples with sustain loop are not fixed (too complex to get right).
 */
-void HQ_FixSamples(void)
+static void HQ_FixSamples(void)
 {
 	sample_t *s = Song.Smp;
 	for (int32_t i = 0; i < Song.Header.SmpNum; i++, s++)
@@ -603,27 +602,7 @@ void HQ_FixSamples(void)
 	}
 }
 
-bool HQ_InitSound(int32_t mixingFrequency)
-{
-	if (mixingFrequency < 8000)
-		mixingFrequency = 8000;
-	else if (mixingFrequency > 768000)
-		mixingFrequency = 768000;
-
-	const int32_t MaxSamplesToMix = (int32_t)ceil((mixingFrequency * 2.5) / LOWEST_BPM_POSSIBLE) + 1;
-
-	fMixBuffer = (float *)malloc(MaxSamplesToMix * 2 * sizeof (float));
-	if (fMixBuffer == NULL)
-		return false;
-
-	Driver.MixSpeed = mixingFrequency;
-	Driver.Type = DRIVER_HQ;
-
-	dFreq2DeltaMul = (double)(UINT32_MAX+1.0) / mixingFrequency;
-	return InitCubicSplineLUT();
-}
-
-void HQ_UninitSound(void)
+static void HQ_CloseDriver(void)
 {
 	if (fMixBuffer != NULL)
 	{
@@ -636,4 +615,45 @@ void HQ_UninitSound(void)
 		free(fCubicLUT);
 		fCubicLUT = NULL;
 	}
+
+	DriverClose = NULL;
+	DriverMix = NULL;
+	DriverSetTempo = NULL;
+	DriverSetMixVolume = NULL;
+	DriverFixSamples = NULL;
+	DriverResetMixer = NULL;
+	DriverPostMix = NULL;
+	DriverMixSamples = NULL;
+}
+
+bool HQ_InitDriver(int32_t mixingFrequency)
+{
+	if (mixingFrequency < 8000)
+		mixingFrequency = 8000;
+	else if (mixingFrequency > 768000)
+		mixingFrequency = 768000;
+
+	const int32_t MaxSamplesToMix = (int32_t)ceil((mixingFrequency * 2.5) / LOWEST_BPM_POSSIBLE) + 1;
+
+	fMixBuffer = (float *)malloc(MaxSamplesToMix * 2 * sizeof (float));
+	if (fMixBuffer == NULL)
+		return false;
+
+	Driver.Flags = DF_SUPPORTS_MIDI | DF_USES_VOLRAMP | DF_HAS_RESONANCE_FILTER;
+	Driver.NumChannels = 256;
+	Driver.MixSpeed = mixingFrequency;
+	Driver.Type = DRIVER_HQ;
+
+	// setup driver functions
+	DriverClose = HQ_CloseDriver;
+	DriverMix = HQ_Mix;
+	DriverSetTempo = HQ_SetTempo;
+	DriverSetMixVolume = HQ_SetMixVolume;
+	DriverFixSamples = HQ_FixSamples;
+	DriverResetMixer = HQ_ResetMixer;
+	DriverPostMix = HQ_PostMix;
+	DriverMixSamples = HQ_MixSamples;
+
+	dFreq2DeltaMul = (double)(UINT32_MAX+1.0) / mixingFrequency;
+	return InitCubicSplineLUT();
 }

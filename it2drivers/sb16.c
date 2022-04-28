@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../cpu.h"
 #include "../it_structs.h"
 #include "../it_music.h" // Update()
 #include "sb16_m.h"
@@ -15,14 +16,14 @@
 static uint16_t MixVolume;
 static int32_t BytesToMix, *MixBuffer, MixTransferRemaining, MixTransferOffset;
 
-void SB16_MixSamples(void)
+static void SB16_MixSamples(void)
 {
 	MixTransferOffset = 0;
 
 	memset(MixBuffer, 0, BytesToMix * 2 * sizeof (int32_t));
 
 	slaveChn_t *sc = sChn;
-	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
+	for (uint32_t i = 0; i < Driver.NumChannels; i++, sc++)
 	{
 		if (!(sc->Flags & SF_CHAN_ON) || sc->Smp == 100)
 			continue;
@@ -146,19 +147,21 @@ void SB16_MixSamples(void)
 					if (sc->LpD == DIR_BACKWARDS)
 					{
 						SamplesToMix = sc->SamplingPosition - (sc->LoopBeg + 1);
-						if (SamplesToMix > UINT16_MAX) // 8bb: added this to turn 64-bit div into 32-bit div (faster)
+#if CPU_32BIT
+						if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 							SamplesToMix = UINT16_MAX;
-
-						SamplesToMix = (((SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->SmpError) / sc->Delta) + 1;
+#endif
+						SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->SmpError) / sc->Delta) + 1;
 						Driver.Delta = 0 - sc->Delta;
 					}
 					else // 8bb: forwards
 					{
 						SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
+#if CPU_32BIT
 						if (SamplesToMix > UINT16_MAX)
 							SamplesToMix = UINT16_MAX;
-
-						SamplesToMix = (((SamplesToMix << MIX_FRAC_BITS) | ((uint16_t)sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
+#endif
+						SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | ((uint16_t)sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
 						Driver.Delta = sc->Delta;
 					}
 
@@ -179,10 +182,11 @@ void SB16_MixSamples(void)
 						sc->SamplingPosition = sc->LoopBeg + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 
 					uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
+#if CPU_32BIT
 					if (SamplesToMix > UINT16_MAX)
 						SamplesToMix = UINT16_MAX;
-
-					SamplesToMix = (((SamplesToMix << MIX_FRAC_BITS) | ((uint16_t)sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
+#endif
+					SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | ((uint16_t)sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
 					if (SamplesToMix > MixBlockSize)
 						SamplesToMix = MixBlockSize;
 
@@ -207,10 +211,11 @@ void SB16_MixSamples(void)
 					}
 
 					uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
+#if CPU_32BIT
 					if (SamplesToMix > UINT16_MAX)
 						SamplesToMix = UINT16_MAX;
-
-					SamplesToMix = (((SamplesToMix << MIX_FRAC_BITS) | ((uint16_t)sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
+#endif
+					SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | ((uint16_t)sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
 					if (SamplesToMix > MixBlockSize)
 						SamplesToMix = MixBlockSize;
 
@@ -229,28 +234,27 @@ void SB16_MixSamples(void)
 	}
 }
 
-void SB16_SetTempo(uint8_t Tempo)
+static void SB16_SetTempo(uint8_t Tempo)
 {
 	assert(Tempo >= LOWEST_BPM_POSSIBLE);
 	BytesToMix = ((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) / Tempo;
 }
 
-void SB16_SetMixVolume(uint8_t vol)
+static void SB16_SetMixVolume(uint8_t vol)
 {
 	MixVolume = vol;
 	RecalculateAllVolumes();
 }
 
-void SB16_ResetMixer(void) // 8bb: added this
+static void SB16_ResetMixer(void) // 8bb: added this
 {
 	MixTransferRemaining = 0;
 	MixTransferOffset = 0;
 }
 
-int32_t SB16_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: added this
+static int32_t SB16_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: added this
 {
-	// 8bb: we add +1 here to match WAV-writer gain (and OpenMPT)
-	const uint8_t SampleShiftValue = (Song.Header.Flags & ITF_STEREO) ? (13+1) : (14+1);
+	const uint8_t SampleShiftValue = (Song.Header.Flags & ITF_STEREO) ? 13 : 14;
 
 	int32_t SamplesTodo = (SamplesToOutput == 0) ? BytesToMix : SamplesToOutput;
 	for (int32_t i = 0; i < SamplesTodo * 2; i++)
@@ -268,7 +272,7 @@ int32_t SB16_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput) // 8bb: added
 	return SamplesTodo;
 }
 
-void SB16_Mix(int32_t numSamples, int16_t *audioOut) // 8bb: added this (original SB16 driver uses IRQ callback)
+static void SB16_Mix(int32_t numSamples, int16_t *audioOut) // 8bb: added this (original SB16 driver uses IRQ callback)
 {
 	int32_t SamplesLeft = numSamples;
 	while (SamplesLeft > 0)
@@ -296,7 +300,7 @@ void SB16_Mix(int32_t numSamples, int16_t *audioOut) // 8bb: added this (origina
 ** Fixes sample end bytes for interpolation (yes, we have room after the data).
 ** Sustain loops are always handled as non-looping during fix in IT2.
 */
-void SB16_FixSamples(void)
+static void SB16_FixSamples(void)
 {
 	sample_t *s = Song.Smp;
 	for (int32_t i = 0; i < Song.Header.SmpNum; i++, s++)
@@ -347,7 +351,25 @@ void SB16_FixSamples(void)
 	}
 }
 
-bool SB16_InitSound(int32_t mixingFrequency)
+static void SB16_CloseDriver(void)
+{
+	if (MixBuffer != NULL)
+	{
+		free(MixBuffer);
+		MixBuffer = NULL;
+	}
+
+	DriverClose = NULL;
+	DriverMix = NULL;
+	DriverSetTempo = NULL;
+	DriverSetMixVolume = NULL;
+	DriverFixSamples = NULL;
+	DriverResetMixer = NULL;
+	DriverPostMix = NULL;
+	DriverMixSamples = NULL;
+}
+
+bool SB16_InitDriver(int32_t mixingFrequency)
 {
 	if (mixingFrequency < 8000)
 		mixingFrequency = 8000;
@@ -360,8 +382,20 @@ bool SB16_InitSound(int32_t mixingFrequency)
 	if (MixBuffer == NULL)
 		return false;
 
+	Driver.Flags = DF_SUPPORTS_MIDI;
+	Driver.NumChannels = 64;
 	Driver.MixSpeed = mixingFrequency;
 	Driver.Type = DRIVER_SB16;
+
+	// 8bb: setup driver functions
+	DriverClose = SB16_CloseDriver;
+	DriverMix = SB16_Mix; // 8bb: added this (original driver uses IRQ callback)
+	DriverSetTempo = SB16_SetTempo;
+	DriverSetMixVolume = SB16_SetMixVolume;
+	DriverFixSamples = SB16_FixSamples;
+	DriverResetMixer = SB16_ResetMixer; // 8bb: added this
+	DriverPostMix = SB16_PostMix; // 8bb: added this
+	DriverMixSamples = SB16_MixSamples; // 8bb: added this
 
 	/*
 	** MixMode 0 = "32 Bit Non-interpolated"
@@ -369,13 +403,4 @@ bool SB16_InitSound(int32_t mixingFrequency)
 	*/
 	Driver.MixMode = 1; // 8bb: "32 Bit Interpolated"
 	return true;
-}
-
-void SB16_UninitSound(void)
-{
-	if (MixBuffer != NULL)
-	{
-		free(MixBuffer);
-		MixBuffer = NULL;
-	}
 }

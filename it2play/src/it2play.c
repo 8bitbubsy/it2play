@@ -128,7 +128,8 @@ int main(int argc, char *argv[])
 	printf("IT2 sound driver: %s\n",
 		(IT2SoundDriver == DRIVER_WAVWRITER) ? "WAV writer (v2.15 registered)" :
 		(IT2SoundDriver == DRIVER_SB16MMX)   ? "SB16 MMX" :
-		(IT2SoundDriver == DRIVER_SB16)      ? "SB16"    : "HQ (8bb's custom driver w/ stereo sample support)");
+		(IT2SoundDriver == DRIVER_SB16)      ? "SB16"    : "HQ (custom driver w/ stereo sample support)");
+	printf("Max virtual channels in sound driver: %d\n", Driver.NumChannels);
 	printf("\n");
 	printf("Status:\n");
 

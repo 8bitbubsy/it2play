@@ -1,7 +1,7 @@
 /*
 ** 8bb: IT2 replayer system
 **
-** NOTE: MIDI logic is incomplete, but never meant to be ported anyway
+** NOTE: MIDI logic is incomplete, and it was never meant to be ported anyway
 */
 
 #include <assert.h>
@@ -20,18 +20,27 @@
 #include "it2drivers/wavwriter.h"
 #include "it2drivers/hq.h"
 
-// 8bb: added these
-static bool (*DriverInitSound)(int32_t);
-static void (*DriverUninitSound)(void);
-static void (*DriverMix)(int32_t, int16_t *);
-static void (*DriverResetMixer)(void);
-static int32_t (*DriverPostMix)(int16_t *, int32_t);
-static void (*DriverMixSamples)(void);
+enum
+{
+	NNA_NOTE_CUT = 0,
+	NNA_CONTINUE = 1,
+	NNA_NOTE_OFF = 2,
+	NNA_NOTE_FADE = 3,
+
+	DCT_NOTE = 1,
+	DCT_SAMPLE = 2,
+	DCT_INSTRUMENT = 3,
+};
 
 // 8bb: globalized
-void (*DriverSetTempo)(uint8_t);
-void (*DriverSetMixVolume)(uint8_t);
-void (*DriverFixSamples)(void);
+void (*DriverClose)(void) = NULL;
+void (*DriverMix)(int32_t, int16_t *) = NULL;
+void (*DriverResetMixer)(void) = NULL;
+int32_t (*DriverPostMix)(int16_t *, int32_t) = NULL;
+void (*DriverMixSamples)(void) = NULL;
+void (*DriverSetTempo)(uint8_t) = NULL;
+void (*DriverSetMixVolume)(uint8_t) = NULL;
+void (*DriverFixSamples)(void) = NULL;
 bool WAVRender_Flag = false;
 // ------------------------
 
@@ -48,7 +57,8 @@ static uint8_t ChannelCountTable[100], ChannelVolumeTable[100];
 static slaveChn_t *ChannelLocationTable[100];
 // --------------------------------------------
 
-static slaveChn_t *LastSlaveChannel;
+static uint32_t AllocateNumChannels;
+static slaveChn_t *AllocateSlaveOffset, *LastSlaveChannel;
 
 static uint8_t EmptyPattern[72] =
 {
@@ -109,7 +119,7 @@ static void (*VolumeEffectTable[])(hostChn_t *hc) =
 void RecalculateAllVolumes(void)
 {
 	slaveChn_t *sc = sChn;
-	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
+	for (uint32_t i = 0; i < Driver.NumChannels; i++, sc++)
 		sc->Flags |= (SF_RECALC_PAN | SF_RECALC_VOL);
 }
 
@@ -651,9 +661,6 @@ static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, inst
 
 /* 8bb: Are you sure you want to know? ;)
 **
-** NOTE: Porting behavior has not been tested against cases where
-**       all 256 slave voices are busy (Common sample search).
-**
 ** TODO: Remove all goto's and convert to cleaner logic...
 */
 slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
@@ -665,15 +672,19 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 
 	// Instrument handler!
 
-	/* 8bb: Some unneeded MIDI logic was removed from this spot.
-	** It wasn't needed since our implemented drivers always
-	** support all 256 (slave) voices.
-	**
-	** XXX: This might be false. We don't care about MIDI anyway.
-	**/
-
 	if (hc->Ins == 0)
 		return NULL;
+
+	if (hc->Smp == 101 && Driver.NumChannels < MAX_SLAVE_CHANNELS) // 8bb: MIDI and below 256 virtual channels in driver?
+	{
+		AllocateNumChannels = MAX_SLAVE_CHANNELS - Driver.NumChannels;
+		AllocateSlaveOffset = &sChn[Driver.NumChannels];
+	}
+	else
+	{
+		AllocateNumChannels = Driver.NumChannels;
+		AllocateSlaveOffset = sChn; // 8bb: points to first virtual channel
+	}
 
 	instrument_t *ins = &Song.Ins[hc->Ins-1];
 
@@ -686,12 +697,11 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 	if (sc->InsOffs == ins) // 8bb: slave channel has same inst. as host channel?
 		LastSlaveChannel = sc;
 
-	int8_t note, instr = (int8_t)hc->Ins;
-	uint8_t *dupeTypePtr, hcHCN, DCA;
-	uint16_t loopCounter;
+	uint8_t DCT, hostDCValue, hostChannel;
+	uint32_t loopCounter;
 
-	uint8_t NNA = sc->NNA;
-	if (NNA == 0)
+	uint8_t NNAType = sc->NNA;
+	if (NNAType == 0)
 		goto AllocateChannel20; // Notecut.
 
 	sc->HCN |= CHN_DISOWNED; // Disown channel
@@ -700,16 +710,16 @@ AllocateHandleNNA:
 	if (sc->VS == 0 || sc->CVl == 0 || sc->SVl == 0)
 		goto AllocateChannel20;
 
-	// 8bb: oldNNA < 2 == Note continue (do nothing, go to AllocateChannel8)
-	if (NNA == 2)
+	if (NNAType == NNA_NOTE_OFF)
 	{
 		sc->Flags |= SF_NOTE_OFF;
 		GetLoopInformation(sc); // 8bb: update sample loop (sustain released)
 	}
-	else if (NNA >= 3)
+	else if (NNAType >= NNA_NOTE_FADE)
 	{
 		sc->Flags |= SF_FADEOUT;
 	}
+	// 8bb: else: NNA_CONTINUE (do nothing, go to AllocateChannel8)
 
 	goto AllocateChannel8;
 
@@ -718,17 +728,15 @@ AllocateChannel20MIDI:
 	sc->HCN |= CHN_DISOWNED; // Disown channel
 
 	if (hc->Smp != 101)
-		goto AllocateChannel4; // Sample..
+		goto FindAvailableVoice; // Sample..
 
 AllocateChannelMIDIDC:
-	sc = sChn;
-	loopCounter = MAX_SLAVE_CHANNELS;
-	note = hc->Nt2;
-	instr = (int8_t)hc->Ins;
-	dupeTypePtr = &sc->Nte;
-	hcHCN = hc->MCh;
-	DCA = ins->DCA;
-	goto AllocateChannel6;
+	sc = AllocateSlaveOffset;
+	loopCounter = AllocateNumChannels;
+	hostChannel = hc->MCh;
+	DCT = DCT_NOTE; // 8bb: DCT = Duplicate Check Type
+	hostDCValue = hc->Nt2;
+	goto DupeCheckLoop;
 
 AllocateChannel20:
 	if (sc->Smp == 100) // MIDI?
@@ -739,124 +747,121 @@ AllocateChannel20Samples:
 	{
 		sc->Flags |= SF_NOTE_STOP;
 		sc->HCN |= CHN_DISOWNED; // Disown channel
-		goto AllocateChannel4;
+		goto FindAvailableVoice;
 	}
 
 	sc->Flags = SF_NOTE_STOP;
 
-	NNA = sc->DCT; // 8bb: duplicate control
-	if (NNA == 0)
+	DCT = ins->DCT;
+	if (DCT == 0)
 		return AllocateChannelInstrument(hc, sc, ins, hcFlags);
 
-	goto AllocateChannel11;
+	goto DupeCheck;
 
 AllocateChannel8:
 	if (hc->Smp == 101)
 		goto AllocateChannelMIDIDC;
 
-	NNA = ins->DCT;
-	if (NNA == 0)
-		goto AllocateChannel4; // Duplicate check off.
+	DCT = ins->DCT;
+	if (DCT == 0)
+		goto FindAvailableVoice; // Duplicate check off.
 
-AllocateChannel11:
-	sc = sChn;
-	loopCounter = MAX_SLAVE_CHANNELS;
+DupeCheck:
+	sc = AllocateSlaveOffset;
+	loopCounter = AllocateNumChannels;
 
-	uint8_t scHCN;
+	// 8bb: NNA Duplicate Check
 
-	// 8bb: Duplicate Check (NNA)
+	if (DCT == DCT_NOTE)
+	{
+		hostDCValue = hc->Nte;
+	}
+	else if (DCT == DCT_INSTRUMENT)
+	{
+		hostDCValue = hc->Ins;
+	}
+	else
+	{
+		/* 8bb:
+		** OpenMPT modules can have NNA=4, which is DCA_PLUGIN.
+		** In that case it will be handled as DCA_SAMPLE. Oops...
+		*/
+		hostDCValue = hc->Smp - 1;
+		if ((int8_t)hostDCValue < 0)
+			goto FindAvailableVoice; // 8bb: skip duplicate check!
+	}
 
-	// 8bb: Duplicate note
-	note = hc->Nte;
-	instr = (int8_t)hc->Ins;
-	dupeTypePtr = &sc->Nte;
-	if (NNA == 1)
-		goto AllocateDCT;
+	hostChannel = hc->HCN | CHN_DISOWNED;
 
-	// Duplicate instrument
-	dupeTypePtr = &sc->Ins;
-	note = instr;
-	if (NNA == 3)
-		goto AllocateDCT;
+DupeCheckLoop:
+	if (!(sc->Flags & SF_CHAN_ON) || (hc->Smp != 101 && sc->HCN != hostChannel) || sc->Ins != hc->Ins)
+		goto DupeCheckNextChannel;
 
-	// Duplicate sample
-	dupeTypePtr = &sc->Smp;
-	note = hc->Nte - 1;
-	if (note < 0)
-		goto AllocateChannel4;
+	// 8bb: duplicate test
 
-AllocateDCT:
-	hcHCN = hc->HCN | CHN_DISOWNED;
-	DCA = ins->DCA;
+	if (DCT == DCT_NOTE && sc->Nte != hostDCValue)
+		goto DupeCheckNextChannel;
 
-AllocateChannel6:
-	if (!(sc->Flags & SF_CHAN_ON))
-		goto AllocateChannel7;
+	if (DCT == DCT_SAMPLE && sc->Smp != hostDCValue)
+		goto DupeCheckNextChannel;
 
-	if (hc->Smp == 101)
-		goto AllocateChannelMIDIDCT;
-
-	scHCN = sc->HCN;
-	if (scHCN != hcHCN)
-		goto AllocateChannel7;
-
-	// OK. same channel... now..
-AllocateChannelMIDIDCT:
-	if (sc->Ins != instr) // Same inst?
-		goto AllocateChannel7;
-
-	if (*dupeTypePtr != note) // Same note/sample/inst?
-		goto AllocateChannel7;
+	if (DCT == DCT_INSTRUMENT && sc->Ins != hostDCValue)
+		goto DupeCheckNextChannel;
 
 	if (hc->Smp == 101) // New note is a MIDI?
-		goto AllocateChannelMIDIHandling;
+	{
+		if (sc->Smp != 100) // Is current channel a MIDI chan
+			goto DupeCheckNextChannel;
 
-	if (DCA != sc->DCA)
-		goto AllocateChannel7;
+		if (sc->MCh != hostChannel)
+			goto DupeCheckNextChannel;
 
-	if (DCA == 0) // Checks for hiqual
-		goto AllocateChannel20Samples;
+		sc->Flags |= SF_NOTE_STOP;
+		if (sc->HCN & CHN_DISOWNED)
+			goto DupeCheckNextChannel;
 
-	sc->DCT = sc->DCA = 0;
-	NNA = DCA + 1;
-	goto AllocateHandleNNA;
+		sc->HCN |= CHN_DISOWNED;
+		((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON;
 
-AllocateChannelMIDIHandling:
-	if (sc->Smp != 100) // Is current channel a MIDI chan
-		goto AllocateChannel7;
+		goto DupeCheckNextChannel;
+	}
 
-	if (hcHCN != sc->MCh)
-		goto AllocateChannel7;
+	if (sc->DCA == ins->DCA)
+	{
+		if (ins->DCA == 0) // Checks for hiqual
+			goto AllocateChannel20Samples;
 
-	sc->Flags |= SF_NOTE_STOP;
-	if (sc->HCN & CHN_DISOWNED)
-		goto AllocateChannel7;
+		sc->DCT = 0;
+		sc->DCA = 0;
 
-	sc->HCN |= CHN_DISOWNED;
-	((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON;
+		NNAType = ins->DCA + 1;
+		goto AllocateHandleNNA;
+	}
 
-AllocateChannel7:
+DupeCheckNextChannel:
 	sc++;
 	loopCounter--;
 	if (loopCounter != 0)
-		goto AllocateChannel6;
+		goto DupeCheckLoop;
 
-AllocateChannel4:
+FindAvailableVoice:
 
 	// 8bb: search for inactive channels
 
-	sc = sChn;
-	if (hc->Smp != 101) // 8bb: no MIDI
+	sc = AllocateSlaveOffset;
+	if (hc->Smp != 101)
 	{
-		for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
+		// 8bb: no MIDI
+		for (uint32_t i = 0; i < AllocateNumChannels; i++, sc++)
 		{
 			if (!(sc->Flags & SF_CHAN_ON))
 				return AllocateChannelInstrument(hc, sc, ins, hcFlags);
 		}
 	}
-	else // MIDI 'slave channels' have to be maintained if still referenced
+	else 
 	{
-		for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
+		// MIDI 'slave channels' have to be maintained if still referenced
+		for (uint32_t i = 0; i < AllocateNumChannels; i++, sc++)
 		{
 			if (!(sc->Flags & SF_CHAN_ON))
 			{
@@ -875,17 +880,17 @@ AllocateChannel4:
 	memset(ChannelVolumeTable, 255, sizeof (ChannelVolumeTable));
 	memset(ChannelLocationTable, 0, sizeof (ChannelLocationTable));
 
-	sc = sChn;
-	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
+	sc = AllocateSlaveOffset;
+	for (uint32_t i = 0; i < AllocateNumChannels; i++, sc++)
 	{
-		if (sc->Smp < 100)
+		if (sc->Smp > 99) // Just for safety
+			continue;
+
+		ChannelCountTable[sc->Smp]++;
+		if ((sc->HCN & CHN_DISOWNED) && sc->FV < ChannelVolumeTable[sc->Smp])
 		{
-			ChannelCountTable[sc->Smp]++;
-			if ((sc->HCN & CHN_DISOWNED) && sc->FV <= ChannelVolumeTable[sc->Smp])
-			{
-				ChannelLocationTable[sc->Smp] = sc;
-				ChannelVolumeTable[sc->Smp] = sc->FV;
-			}
+			ChannelLocationTable[sc->Smp] = sc;
+			ChannelVolumeTable[sc->Smp] = sc->FV;
 		}
 	}
 
@@ -911,8 +916,8 @@ AllocateChannel4:
 
 	memset(ChannelCountTable, 0, MAX_HOST_CHANNELS);
 
-	sc = sChn;
-	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
+	sc = AllocateSlaveOffset;
+	for (uint32_t i = 0; i < AllocateNumChannels; i++, sc++)
 		ChannelCountTable[sc->HCN & 63]++;
 
 	// OK.. search through and find the most heavily used channel
@@ -936,10 +941,10 @@ AllocateChannel4:
 			// Now search for softest disowned sample (not non-single)
 
 			sc = NULL;
-			slaveChn_t *scTmp = sChn;
+			slaveChn_t *scTmp = AllocateSlaveOffset;
 
 			lowestVol = 255;
-			for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, scTmp++)
+			for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 			{
 				if ((scTmp->HCN & CHN_DISOWNED) && scTmp->FV <= lowestVol)
 				{
@@ -958,15 +963,15 @@ AllocateChannel4:
 		}
 
 		hostCh |= CHN_DISOWNED; // Search for disowned only
-		sc = NULL;
+		sc = NULL; // Offset
 
 		lowestVol = 255;
 		uint8_t targetSmp = hc->Smp-1;
 
-		slaveChn_t *scTmp = sChn;
-		for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, scTmp++)
+		slaveChn_t *scTmp = AllocateSlaveOffset;
+		for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 		{
-			if (scTmp->HCN != hostCh || scTmp->FV > lowestVol)
+			if (scTmp->HCN != hostCh || scTmp->FV >= lowestVol)
 				continue;
 
 			// Now check if any other channel contains this sample
@@ -978,11 +983,11 @@ AllocateChannel4:
 				continue;
 			}
 
-			slaveChn_t *scTmp2 = sChn;
+			slaveChn_t *scTmp2 = AllocateSlaveOffset;
 
 			uint8_t scSmp = scTmp->Smp;
 			scTmp->Smp = 255;
-			for (int32_t j = 0; j < MAX_SLAVE_CHANNELS; j++, scTmp2++)
+			for (uint32_t j = 0; j < AllocateNumChannels; j++, scTmp2++)
 			{
 				if (scTmp2->Smp == targetSmp || scTmp2->Smp == scSmp)
 				{
@@ -1005,10 +1010,10 @@ AllocateChannel4:
 
 	lowestVol = 255;
 
-	slaveChn_t *scTmp = sChn;
-	for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, scTmp++)
+	slaveChn_t *scTmp = AllocateSlaveOffset;
+	for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 	{
-		if (scTmp->Smp == sc->Smp && (scTmp->HCN & CHN_DISOWNED) && scTmp->FV <= lowestVol)
+		if (scTmp->Smp == sc->Smp && (scTmp->HCN & CHN_DISOWNED) && scTmp->FV < lowestVol)
 		{
 			sc = scTmp;
 			lowestVol = scTmp->FV;
@@ -1375,8 +1380,8 @@ static void PreInitCommand(hostChn_t *hc)
 
 	hc->Flags |= HF_ROW_UPDATED;
 
-	bool ChannelOff = !!(Song.Header.ChnlPan[hc->HCN] & 128);
-	if (ChannelOff && (hc->Flags & HF_CHAN_ON))
+	bool ChannelMuted = !!(Song.Header.ChnlPan[hc->HCN] & 128);
+	if (ChannelMuted && !(hc->Flags & HF_FREEPLAY_NOTE) && (hc->Flags & HF_CHAN_ON))
 		((slaveChn_t *)hc->SCOffst)->Flags |= SF_CHN_MUTED;
 }
 
@@ -1863,7 +1868,7 @@ static void UpdateInstruments(void)
 static void UpdateSamples(void)
 {
 	slaveChn_t *sc = sChn;
-	for (uint32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
+	for (uint32_t i = 0; i < Driver.NumChannels; i++, sc++)
 	{
 		if (!(sc->Flags & SF_CHAN_ON))
 			continue;
@@ -1955,72 +1960,34 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 		Music_Close();
 	}
 
-	// 8bb: set up driver functions
-
-	if (DriverType == DRIVER_SB16)
-	{
-		DriverInitSound = SB16_InitSound;
-		DriverUninitSound = SB16_UninitSound;
-		DriverMix = SB16_Mix; // 8bb: added this (original SB16 MMX driver uses IRQ callback)
-		DriverSetTempo = SB16_SetTempo;
-		DriverSetMixVolume = SB16_SetMixVolume;
-		DriverFixSamples = SB16_FixSamples;
-		DriverResetMixer = SB16_ResetMixer; // 8bb: added this
-		DriverPostMix = SB16_PostMix; // 8bb: added this
-		DriverMixSamples = SB16_MixSamples; // 8bb: added this
-
-		Driver.Flags = DF_SUPPORTS_MIDI;
-	}
-	else if (DriverType == DRIVER_WAVWRITER)
-	{
-		DriverInitSound = WAVWriter_InitSound;
-		DriverUninitSound = WAVWriter_UninitSound;
-		DriverMix = WAVWriter_Mix;
-		DriverSetTempo = WAVWriter_SetTempo;
-		DriverSetMixVolume = WAVWriter_SetMixVolume;
-		DriverFixSamples = WAVWriter_FixSamples;
-		DriverResetMixer = WAVWriter_ResetMixer;
-		DriverPostMix = WAVWriter_PostMix;
-		DriverMixSamples = WAVWriter_MixSamples;
-
-		Driver.Flags = DF_SUPPORTS_MIDI | DF_USES_VOLRAMP | DF_HAS_RESONANCE_FILTER;
-	}
-	else if (DriverType == DRIVER_SB16MMX)
-	{
-		DriverInitSound = SB16MMX_InitSound;
-		DriverUninitSound = SB16MMX_UninitSound;
-		DriverMix = SB16MMX_Mix;
-		DriverSetTempo = SB16MMX_SetTempo;
-		DriverSetMixVolume = SB16MMX_SetMixVolume;
-		DriverFixSamples = SB16MMX_FixSamples;
-		DriverResetMixer = SB16MMX_ResetMixer;
-		DriverPostMix = SB16MMX_PostMix;
-		DriverMixSamples = SB16MMX_MixSamples;
-
-		Driver.Flags = DF_SUPPORTS_MIDI | DF_USES_VOLRAMP | DF_HAS_RESONANCE_FILTER;
-	}
-	else // 8bb: HQ (default, my own high-quality driver)
-	{
-		DriverInitSound = HQ_InitSound;
-		DriverUninitSound = HQ_UninitSound;
-		DriverMix = HQ_Mix;
-		DriverSetTempo = HQ_SetTempo;
-		DriverSetMixVolume = HQ_SetMixVolume;
-		DriverFixSamples = HQ_FixSamples;
-		DriverResetMixer = HQ_ResetMixer;
-		DriverPostMix = HQ_PostMix;
-		DriverMixSamples = HQ_MixSamples;
-
-		Driver.Flags = DF_SUPPORTS_MIDI | DF_USES_VOLRAMP | DF_HAS_RESONANCE_FILTER;
-	}
-
 	if (!openMixer(mixingFrequency, mixingBufferSize))
 		return false;
 
-	if (!DriverInitSound(mixingFrequency))
-		return false;
+	switch (DriverType)
+	{
+		default:
+		case DRIVER_HQ:
+			if (!HQ_InitDriver(mixingFrequency))
+				return false;
+		break;
 
-	// 8bb: pre-calc filter coeff tables if the selected driver has filters
+		case DRIVER_SB16:
+			if (!SB16_InitDriver(mixingFrequency))
+				return false;
+		break;
+
+		case DRIVER_SB16MMX:
+			if (!SB16MMX_InitDriver(mixingFrequency))
+				return false;
+		break;
+
+		case DRIVER_WAVWRITER:
+			if (!WAVWriter_InitDriver(mixingFrequency))
+				return false;
+		break;
+	}
+
+	// 8bb: pre-calc filter coeff tables if the selected driver has filter support
 	if (Driver.Flags & DF_HAS_RESONANCE_FILTER)
 	{
 		// 8bb: pre-calculate QualityFactorTable (bit-accurate)
@@ -2037,12 +2004,15 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 void Music_Close(void) // 8bb: added this
 {
 	closeMixer();
-	DriverUninitSound();
+
+	if (DriverClose != NULL)
+		DriverClose();
 }
 
 void Music_InitTempo(void)
 {
-	DriverSetTempo((uint8_t)Song.Tempo);
+	if (DriverSetTempo != NULL)
+		DriverSetTempo((uint8_t)Song.Tempo);
 }
 
 void Music_Stop(void)
@@ -2169,7 +2139,9 @@ void Music_PlaySong(uint16_t order)
 
 	InterpretState = InterpretType = 0; // 8bb: clear MIDI filter interpretor state
 
-	DriverResetMixer();
+	if (DriverResetMixer != NULL)
+		DriverResetMixer();
+
 	Song.Playing = true;
 }
 
@@ -2192,7 +2164,9 @@ void Music_PrepareWAVRender(void)  // 8bb: added this
 	Seed2 = 0x5678;
 
 	InterpretState = InterpretType = 0; // 8bb: clear MIDI filter interpretor state
-	DriverResetMixer();
+
+	if (DriverResetMixer != NULL)
+		DriverResetMixer();
 }
 
 void Music_ReleaseSample(uint32_t sample)

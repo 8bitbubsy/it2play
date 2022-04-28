@@ -1831,8 +1831,9 @@ void CommandS(hostChn_t *hc)
 		InitNoCommand(hc);
 		hc->Flags |= HF_ROW_UPDATED;
 
-		if ((Song.Header.ChnlPan[hc->HCN] & 0x80) && (hc->Flags & HF_CHAN_ON))
-			((slaveChn_t *)hc->SCOffst)->Flags |= SF_NEW_NOTE;
+		bool ChannelMuted = !!(Song.Header.ChnlPan[hc->HCN] & 128);
+		if (ChannelMuted && !(hc->Flags & HF_FREEPLAY_NOTE) && (hc->Flags & HF_CHAN_ON))
+			((slaveChn_t *)hc->SCOffst)->Flags |= SF_CHN_MUTED;
 	}
 	else if (SCmd == 0xC0) // Note cut.
 	{

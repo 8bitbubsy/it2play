@@ -81,12 +81,6 @@
     <ClInclude Include="..\..\it_music.h" />
     <ClInclude Include="..\..\it_structs.h" />
     <ClInclude Include="..\..\it_tables.h" />
-    <ClInclude Include="..\..\it2drivers\sb16mmx.h">
-      <Filter>it2drivers</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\it2drivers\sb16.h">
-      <Filter>it2drivers</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\it2drivers\sb16_m.h">
       <Filter>it2drivers</Filter>
     </ClInclude>
@@ -120,5 +114,12 @@
     <ClInclude Include="..\..\it2drivers\hq_m.h">
       <Filter>it2drivers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\it2drivers\sb16.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\it2drivers\sb16mmx.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\cpu.h" />
   </ItemGroup>
 </Project>
