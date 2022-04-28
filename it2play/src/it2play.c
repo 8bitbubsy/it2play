@@ -202,7 +202,7 @@ static void showUsage(void)
 	printf("                      If no frequency is specificed, 48000 will be used.\n");
 	printf("    -b buffersize     Specifies the mixing buffer size (256..8192)\n");
 	printf("    -d driver         Specifies what IT2 driver to use. Available choices are:\n");
-	printf("                         HQ        (8bb's driver w/ support for stereo samples)\n");
+	printf("                         HQ        (custom driver w/ stereo sample support)\n");
 	printf("                         SB16      (Sound Blaster 16, no filters/ramping)\n");
 	printf("                         SB16MMX   (Sound Blaster 16 MMX)\n");
 	printf("                         WAVWRITER (IT2.15 WAV writer)\n");
