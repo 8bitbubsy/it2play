@@ -27,6 +27,7 @@ static int32_t mixingFrequency = DEFAULT_MIX_FREQ;
 static int32_t mixingBufferSize = DEFAULT_MIX_BUFSIZE;
 static int32_t IT2SoundDriver = DEFAULT_DRIVER;
 
+static int32_t peakVoices;
 static volatile bool programRunning;
 static char *filename, *WAVRenderFilename;
 
@@ -137,6 +138,8 @@ int main(int argc, char *argv[])
 	modifyTerminal();
 #endif
 
+	peakVoices = 0;
+
 	programRunning = true;
 	while (programRunning)
 	{
@@ -167,11 +170,15 @@ int main(int argc, char *argv[])
 			orderEnd = 0;
 		}
 
-		printf(" Playing, Order: %d/%d, Pattern: %d, Row: %d/%d, %d Channels      \r",
+		int32_t activeVoices = Music_GetActiveVoices();
+		if (activeVoices > peakVoices)
+			peakVoices = activeVoices;
+
+		printf(" Playing, Order: %d/%d, Pattern: %d, Row: %d/%d, %d Channels (%d)      \r",
 			currOrder, orderEnd,
 			Song.CurrentPattern,
 			Song.CurrentRow, Song.NumberOfRows,
-			Music_GetActiveVoices());
+			activeVoices, peakVoices);
 		fflush(stdout);
 
 		Sleep(25);
@@ -198,7 +205,7 @@ static void showUsage(void)
 	printf("  Options:\n");
 	printf("    input_module      Specifies the IT module file to load\n");
 	printf("    -f hz             Specifies the mixing frequency (8000..64000).\n");
-	printf("                      (HQ driver suports 8000..768000).\n");
+	printf("                      (HQ driver supports 8000..768000).\n");
 	printf("                      If no frequency is specificed, 48000 will be used.\n");
 	printf("    -b buffersize     Specifies the mixing buffer size (256..8192)\n");
 	printf("    -d driver         Specifies what IT2 driver to use. Available choices are:\n");
