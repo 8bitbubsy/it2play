@@ -854,9 +854,8 @@ void InitCommandJ(hostChn_t *hc)
 
 void InitCommandK(hostChn_t *hc)
 {
-	uint8_t CmdVal = hc->CmdVal;
-	if (CmdVal > 0)
-		hc->DKL = CmdVal;
+	if (hc->CmdVal > 0)
+		hc->DKL = hc->CmdVal;
 
 	InitNoCommand(hc);
 
@@ -864,6 +863,8 @@ void InitCommandK(hostChn_t *hc)
 	{
 		InitVibrato(hc);
 		InitCommandD7(hc, (slaveChn_t *)hc->SCOffst);
+
+		hc->Flags |= HF_ALWAYS_UPDATE_EFX; // Always update.
 	}
 }
 
