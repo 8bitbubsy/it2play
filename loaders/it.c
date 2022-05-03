@@ -1,3 +1,5 @@
+// all of the comments in this file are written by me (8bitbubsy)
+
 // for finding memory leaks in debug mode with Visual Studio
 #if defined _DEBUG && defined _MSC_VER
 #include <crtdbg.h>
@@ -97,9 +99,7 @@ bool LoadIT(MEMFILE *m)
 	// read embedded MIDI configuration, if preset (needed for Zxx macros)
 	char *MIDIDataArea = Music_GetMIDIDataArea();
 	if (Song.Header.Special & 8)
-	{
 		ReadBytes(m, MIDIDataArea, (9+16+128)*32);
-	}
 
 	// load song message, if present
 	if ((Song.Header.Special & 1) && Song.Header.MessageLength > 0 && Song.Header.MessageOffset > 0)
@@ -306,7 +306,7 @@ bool LoadIT(MEMFILE *m)
 		if (meof(m))
 			return false;
 		
-		bool Stereo = !!(s->Flags & SMPF_STEREO); // 8bb: added stereo support for custom HQ driver
+		bool Stereo = !!(s->Flags & SMPF_STEREO); // added stereo support for custom HQ driver
 		bool Compressed = !!(s->Flags & SMPF_COMPRESSED);
 		bool Sample16Bit = !!(s->Flags & SMPF_16BIT);
 		bool SignedSamples = !!(s->Cvt & 1);
@@ -324,7 +324,7 @@ bool LoadIT(MEMFILE *m)
 		if (!Music_AllocateSample(i, s->Length << Sample16Bit))
 			return false;
 
-		// 8bb: added stereo support for custom HQ driver
+		// added stereo support for custom HQ driver
 		if (Stereo)
 		{
 			if (!Music_AllocateRightSample(i, s->Length << Sample16Bit))
@@ -348,12 +348,12 @@ bool LoadIT(MEMFILE *m)
 		{
 			mread(s->Data, 1, s->Length, m);
 
-			// 8bb: added stereo support for custom HQ driver
+			// added stereo support for custom HQ driver
 			if (Stereo)
 				mread(s->DataR, 1, s->Length, m);
 		}
 
-		// 8bb: convert unsigned sample to signed
+		// convert unsigned sample to signed
 		if (!SignedSamples)
 		{
 			if (Sample16Bit)
@@ -370,7 +370,7 @@ bool LoadIT(MEMFILE *m)
 			}
 		}
 
-		if (Sample16Bit) // 8bb: Music_AllocateSample() also set s->Length, divide by two if 16-bit
+		if (Sample16Bit) // Music_AllocateSample() also set s->Length, divide by two if 16-bit
 			s->Length >>= 1;
 	}
 
@@ -616,10 +616,10 @@ static bool LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool Stereo, bool
 
 		Decompress16BitData((int16_t *)DstPtr, DecompBuffer, BytesToUnpack);
 
-		if (DeltaEncoded) // 8bb: convert from delta values to PCM
+		if (DeltaEncoded) // convert from delta values to PCM
 		{
 			int16_t *Ptr16 = (int16_t *)DstPtr;
-			int16_t LastSmp16 = 0; // 8bb: yes, reset this every block!
+			int16_t LastSmp16 = 0; // yes, reset this every block!
 
 			const uint32_t Length = BytesToUnpack >> 1;
 			for (uint32_t j = 0; j < Length; j++)
@@ -633,7 +633,7 @@ static bool LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool Stereo, bool
 		i -= BytesToUnpack;
 	}
 
-	if (Stereo) // 8bb: added stereo support for custom HQ driver
+	if (Stereo) // added stereo support for custom HQ driver
 	{
 		DstPtr = (int8_t *)s->DataR;
 
@@ -650,10 +650,10 @@ static bool LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool Stereo, bool
 
 			Decompress16BitData((int16_t *)DstPtr, DecompBuffer, BytesToUnpack);
 
-			if (DeltaEncoded) // 8bb: convert from delta values to PCM
+			if (DeltaEncoded) // convert from delta values to PCM
 			{
 				int16_t *Ptr16 = (int16_t *)DstPtr;
-				int16_t LastSmp16 = 0; // 8bb: yes, reset this every block!
+				int16_t LastSmp16 = 0; // yes, reset this every block!
 
 				const uint32_t Length = BytesToUnpack >> 1;
 				for (uint32_t j = 0; j < Length; j++)
@@ -693,9 +693,9 @@ static bool LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool Stereo, bool 
 
 		Decompress8BitData(DstPtr, DecompBuffer, BytesToUnpack);
 
-		if (DeltaEncoded) // 8bb: convert from delta values to PCM
+		if (DeltaEncoded) // convert from delta values to PCM
 		{
-			int8_t LastSmp8 = 0; // 8bb: yes, reset this every block!
+			int8_t LastSmp8 = 0; // yes, reset this every block!
 			for (uint32_t j = 0; j < BytesToUnpack; j++)
 			{
 				LastSmp8 += DstPtr[j];
@@ -707,7 +707,7 @@ static bool LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool Stereo, bool 
 		i -= BytesToUnpack;
 	}
 
-	if (Stereo) // 8bb: added stereo support for custom HQ driver
+	if (Stereo) // added stereo support for custom HQ driver
 	{
 		DstPtr = (int8_t *)s->DataR;
 
@@ -724,9 +724,9 @@ static bool LoadCompressed8BitSample(MEMFILE *m, sample_t *s, bool Stereo, bool 
 
 			Decompress8BitData(DstPtr, DecompBuffer, BytesToUnpack);
 
-			if (DeltaEncoded) // 8bb: convert from delta values to PCM
+			if (DeltaEncoded) // convert from delta values to PCM
 			{
-				int8_t LastSmp8 = 0; // 8bb: yes, reset this every block!
+				int8_t LastSmp8 = 0; // yes, reset this every block!
 				for (uint32_t j = 0; j < BytesToUnpack; j++)
 				{
 					LastSmp8 += DstPtr[j];
