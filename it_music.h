@@ -4,6 +4,15 @@
 #include <stdbool.h>
 #include "it_structs.h"
 
+// AUDIO DRIVERS
+#if defined AUDIODRIVER_SDL
+#include "audiodrivers/sdl/sdldriver.h"
+#elif defined AUDIODRIVER_WINMM
+#include "audiodrivers/winmm/winmm.h"
+#else
+// Read "audiodrivers/how_to_write_drivers.txt"
+#endif
+
 enum
 {
 	MIDICOMMAND_START         = 0x0000,
@@ -23,15 +32,6 @@ enum
 
 #define MIX_FRAC_BITS 16
 #define MIX_FRAC_MASK ((1 << MIX_FRAC_BITS)-1)
-
-// AUDIO DRIVERS
-#if defined AUDIODRIVER_SDL
-#include "audiodrivers/sdl/sdldriver.h"
-#elif defined AUDIODRIVER_WINMM
-#include "audiodrivers/winmm/winmm.h"
-#else
-// Read "audiodrivers/how_to_write_drivers.txt"
-#endif
 
 /* 8bb:
 ** Amount of extra bytes to allocate for every instrument sample,
