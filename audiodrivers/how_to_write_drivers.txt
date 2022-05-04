@@ -9,14 +9,14 @@
   bool openMixer(int32_t mixingFrequency, int32_t mixingBufferSize); // 16000..64000, 256..8192 (true if ok, false if fail)
   void closeMixer(void);
 
-3) When the audio API is requesting samples, make a call to mix_UpdateBuffer(), f.ex.:
+3) When the audio API is requesting samples, make a call to Music_FillAudioBuffer(), f.ex.:
 
    Music_FillAudioBuffer((int16_t *)stream, len / 4);
   
 4) Make your own preprocessor define (f.ex. AUDIODRIVER_ALSA) and pass it to the compiler during compilation
    (also remember to add the correct driver .c file to the compilation script)
 
-5) In "pmplay.h", insert your preprocessor define and include in the "AUDIO DRIVERS" #ifdef chain and
+5) In "it_music.h", insert your preprocessor define and include in the "AUDIO DRIVERS" #ifdef chain and
    include your audio driver header in there.
 
 -------------------------------------------------------
