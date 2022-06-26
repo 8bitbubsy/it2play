@@ -36,6 +36,39 @@ static void handleArguments(int argc, char *argv[]);
 static void readKeyboard(void);
 static int32_t renderToWav(void);
 
+static int16_t getCurrOrder(void)
+{
+	int16_t currOrder = Song.CurrentOrder;
+	if (currOrder < 0) // this can happen for a split second when you decrease the position :)
+		currOrder = 0;
+
+	return currOrder;
+}
+
+static int16_t getOrderEnd(int16_t currOrder)
+{
+	int16_t orderEnd = Song.Header.OrdNum - 1;
+	if (orderEnd > 0)
+	{
+		int16_t i = currOrder;
+		for (; i < orderEnd; i++)
+		{
+			if (Song.Orders[i] == 255)
+				break;
+		}
+
+		orderEnd = i;
+		if (orderEnd > 0)
+			orderEnd--;
+	}
+	else
+	{
+		orderEnd = 0;
+	}
+
+	return orderEnd;
+}
+
 // yuck!
 #ifdef _WIN32
 void wavRecordingThread(void *arg)
@@ -145,30 +178,8 @@ int main(int argc, char *argv[])
 	{
 		readKeyboard();
 
-		int16_t currOrder = Song.CurrentOrder;
-		if (currOrder < 0) // this can happen for a split second when you decrease the position :)
-			currOrder = 0;
-
-		// find current "end of order"
-
-		int16_t orderEnd = Song.Header.OrdNum - 1;
-		if (orderEnd > 0)
-		{
-			int16_t i = currOrder;
-			for (; i < orderEnd; i++)
-			{
-				if (Song.Orders[i] == 255)
-					break;
-			}
-
-			orderEnd = i;
-			if (orderEnd > 0)
-				orderEnd--;
-		}
-		else
-		{
-			orderEnd = 0;
-		}
+		int16_t currOrder = getCurrOrder();
+		int16_t orderEnd = getOrderEnd(currOrder);
 
 		int32_t activeVoices = Music_GetActiveVoices();
 		if (activeVoices > peakVoices)
@@ -315,17 +326,23 @@ static int32_t renderToWav(void)
 		return 1;
 	}
 
-	printf("Rendering to WAV. If stuck forever, press any key to stop rendering...\n");
+	printf("Rendering to WAV. If stuck forever (or percentage wraps around), press any key to stop rendering...\n");
 
 #ifndef _WIN32
 	modifyTerminal();
 #endif
+	int16_t currOrder, orderEnd;
 	while (WAVRender_Flag)
 	{
-		Sleep(100);
+		currOrder = getCurrOrder();
+		orderEnd = getOrderEnd(currOrder);
+
+		printf("Percentage done: %d%%     \r", (currOrder*100)/orderEnd);
+		Sleep(25);
 		if ( _kbhit())
 			WAVRender_Flag = false;
 	}
+	printf("Percentage done: 100%%\nDone.\n");
 #ifndef _WIN32
 	revertTerminal();
 #endif
