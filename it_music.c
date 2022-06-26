@@ -27,9 +27,12 @@ enum
 	NNA_NOTE_OFF = 2,
 	NNA_NOTE_FADE = 3,
 
+	DCT_DISABLED = 0,
 	DCT_NOTE = 1,
 	DCT_SAMPLE = 2,
 	DCT_INSTRUMENT = 3,
+
+	DCA_NOTE_CUT = 0
 };
 
 // 8bb: globalized
@@ -557,6 +560,7 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 	}
 }
 
+// 8bb: this function is used in AllocateChannel()
 static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 {
 	// Sample handler
@@ -615,6 +619,7 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 	}
 }
 
+// 8bb: this function is used in AllocateChannel()
 static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins, uint8_t *hcFlags)
 {
 	assert(hc != NULL && sc != NULL && ins != NULL);
@@ -659,10 +664,50 @@ static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, inst
 	return sc;
 }
 
-/* 8bb: Are you sure you want to know? ;)
-**
-** TODO: Remove all goto's and convert to cleaner logic...
-*/
+// 8bb: this function is used in AllocateChannel()
+static bool DuplicateCheck(slaveChn_t **scOut, hostChn_t *hc, uint8_t hostChannel, instrument_t *ins, uint8_t dupeType, uint8_t hostDupeVal)
+{
+	slaveChn_t *sc = AllocateSlaveOffset;
+	for (uint32_t i = 0; i < AllocateNumChannels; i++, sc++) 
+	{
+		*scOut = sc; // 8bb: copy current slave channel pointer to scOut
+
+		if (!(sc->Flags & SF_CHAN_ON) || (hc->Smp != 101 && sc->HCN != hostChannel) || sc->Ins != hc->Ins)
+			continue;
+
+		// 8bb: the actual duplicate test
+
+		if (dupeType == DCT_NOTE && sc->Nte != hostDupeVal)
+			continue;
+
+		if (dupeType == DCT_SAMPLE && sc->Smp != hostDupeVal)
+			continue;
+
+		if (dupeType == DCT_INSTRUMENT && sc->Ins != hostDupeVal)
+			continue;
+
+		if (hc->Smp == 101) // New note is a MIDI?
+		{
+			if (sc->Smp == 100 && sc->MCh == hostChannel) // Is current channel a MIDI chan
+			{
+				sc->Flags |= SF_NOTE_STOP;
+				if (!(sc->HCN & CHN_DISOWNED))
+				{
+					sc->HCN |= CHN_DISOWNED;
+					((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON;
+				}
+			}
+		}
+		else if (sc->DCA == ins->DCA)
+		{
+			return true; // 8bb: dupe found
+		}
+	}
+	
+	return false; // 8bb: dupe not found
+}
+
+// 8bb: are you sure you want to know? ;)
 slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 {
 	LastSlaveChannel = NULL;
@@ -686,165 +731,140 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		AllocateSlaveOffset = sChn; // 8bb: points to first virtual channel
 	}
 
+	// 8bb: some of these are initialized only to prevent compiler warnings
+	uint8_t NNAType = 0;
+	slaveChn_t *sc = NULL;
+	uint8_t hostChannel, dupeType, hostDupeVal;
+
 	instrument_t *ins = &Song.Ins[hc->Ins-1];
 
-	if (!((*hcFlags) & HF_CHAN_ON))
-		goto AllocateChannel8;
-
-	// New note action handling...
-
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
-	if (sc->InsOffs == ins) // 8bb: slave channel has same inst. as host channel?
-		LastSlaveChannel = sc;
-
-	uint8_t DCT, hostDCValue, hostChannel;
-	uint32_t loopCounter;
-
-	uint8_t NNAType = sc->NNA;
-	if (NNAType == 0)
-		goto AllocateChannel20; // Notecut.
-
-	sc->HCN |= CHN_DISOWNED; // Disown channel
-
-AllocateHandleNNA:
-	if (sc->VS == 0 || sc->CVl == 0 || sc->SVl == 0)
-		goto AllocateChannel20;
-
-	if (NNAType == NNA_NOTE_OFF)
+	bool scInitialized = true;
+	if (!((*hcFlags) & HF_CHAN_ON)) // 8bb: host channel on?
 	{
-		sc->Flags |= SF_NOTE_OFF;
-		GetLoopInformation(sc); // 8bb: update sample loop (sustain released)
-	}
-	else if (NNAType >= NNA_NOTE_FADE)
-	{
-		sc->Flags |= SF_FADEOUT;
-	}
-	// 8bb: else: NNA_CONTINUE (do nothing, go to AllocateChannel8)
-
-	goto AllocateChannel8;
-
-AllocateChannel20MIDI:
-	sc->Flags |= SF_NOTE_STOP;
-	sc->HCN |= CHN_DISOWNED; // Disown channel
-
-	if (hc->Smp != 101)
-		goto FindAvailableVoice; // Sample..
-
-AllocateChannelMIDIDC:
-	sc = AllocateSlaveOffset;
-	loopCounter = AllocateNumChannels;
-	hostChannel = hc->MCh;
-	DCT = DCT_NOTE; // 8bb: DCT = Duplicate Check Type
-	hostDCValue = hc->Nt2;
-	goto DupeCheckLoop;
-
-AllocateChannel20:
-	if (sc->Smp == 100) // MIDI?
-		goto AllocateChannel20MIDI;
-
-AllocateChannel20Samples:
-	if (Driver.Flags & DF_USES_VOLRAMP)
-	{
-		sc->Flags |= SF_NOTE_STOP;
-		sc->HCN |= CHN_DISOWNED; // Disown channel
-		goto FindAvailableVoice;
-	}
-
-	sc->Flags = SF_NOTE_STOP;
-
-	DCT = ins->DCT;
-	if (DCT == 0)
-		return AllocateChannelInstrument(hc, sc, ins, hcFlags);
-
-	goto DupeCheck;
-
-AllocateChannel8:
-	if (hc->Smp == 101)
-		goto AllocateChannelMIDIDC;
-
-	DCT = ins->DCT;
-	if (DCT == 0)
-		goto FindAvailableVoice; // Duplicate check off.
-
-DupeCheck:
-	sc = AllocateSlaveOffset;
-	loopCounter = AllocateNumChannels;
-
-	// 8bb: NNA Duplicate Check
-
-	if (DCT == DCT_NOTE)
-	{
-		hostDCValue = hc->Nte;
-	}
-	else if (DCT == DCT_INSTRUMENT)
-	{
-		hostDCValue = hc->Ins;
+		scInitialized = false;
 	}
 	else
 	{
-		/* 8bb:
-		** OpenMPT modules can have NNA=4, which is DCA_PLUGIN.
-		** In that case it will be handled as DCA_SAMPLE. Oops...
-		*/
-		hostDCValue = hc->Smp - 1;
-		if ((int8_t)hostDCValue < 0)
-			goto FindAvailableVoice; // 8bb: skip duplicate check!
+		sc = (slaveChn_t *)hc->SCOffst;
+		if (sc->InsOffs == ins) // 8bb: slave channel has same inst. as host channel?
+			LastSlaveChannel = sc;
+
+		NNAType = sc->NNA;
+		if (NNAType != NNA_NOTE_CUT) // 8bb: not note-cut
+			sc->HCN |= CHN_DISOWNED; // Disown channel
 	}
 
-	hostChannel = hc->HCN | CHN_DISOWNED;
-
-DupeCheckLoop:
-	if (!(sc->Flags & SF_CHAN_ON) || (hc->Smp != 101 && sc->HCN != hostChannel) || sc->Ins != hc->Ins)
-		goto DupeCheckNextChannel;
-
-	// 8bb: duplicate test
-
-	if (DCT == DCT_NOTE && sc->Nte != hostDCValue)
-		goto DupeCheckNextChannel;
-
-	if (DCT == DCT_SAMPLE && sc->Smp != hostDCValue)
-		goto DupeCheckNextChannel;
-
-	if (DCT == DCT_INSTRUMENT && sc->Ins != hostDCValue)
-		goto DupeCheckNextChannel;
-
-	if (hc->Smp == 101) // New note is a MIDI?
+	while (true) // New note action handling...
 	{
-		if (sc->Smp != 100) // Is current channel a MIDI chan
-			goto DupeCheckNextChannel;
+		bool skipMIDITest = false;
+		if (scInitialized)
+		{
+			if (NNAType != NNA_NOTE_CUT && sc->VS > 0 && sc->CVl > 0 && sc->SVl > 0)
+			{
+				if (NNAType == NNA_NOTE_OFF)
+				{
+					sc->Flags |= SF_NOTE_OFF;
+					GetLoopInformation(sc); // 8bb: update sample loop (sustain released)
+				}
+				else if (NNAType >= NNA_NOTE_FADE)
+				{
+					sc->Flags |= SF_FADEOUT;
+				}
+				// 8bb: else: NNA_CONTINUE
+			}
+			else
+			{
+				// 8bb: NNA=Note Cut (or volumes are zero)
+				if (sc->Smp == 100) // MIDI?
+				{
+					sc->Flags |= SF_NOTE_STOP;
+					sc->HCN |= CHN_DISOWNED; // Disown channel
 
-		if (sc->MCh != hostChannel)
-			goto DupeCheckNextChannel;
+					if (hc->Smp != 101)
+						break; // Sample.. (8bb: find available voice now)
+				}
+				else
+				{
+					if (Driver.Flags & DF_USES_VOLRAMP)
+					{
+						sc->Flags |= SF_NOTE_STOP;
+						sc->HCN |= CHN_DISOWNED; // Disown channel
+						break; // 8bb: find available voice now
+					}
 
-		sc->Flags |= SF_NOTE_STOP;
-		if (sc->HCN & CHN_DISOWNED)
-			goto DupeCheckNextChannel;
+					sc->Flags = SF_NOTE_STOP;
+					if (ins->DCT == DCT_DISABLED)
+						return AllocateChannelInstrument(hc, sc, ins, hcFlags);
 
-		sc->HCN |= CHN_DISOWNED;
-		((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON;
+					skipMIDITest = true;
+				}
+			}
+		}
 
-		goto DupeCheckNextChannel;
+		hostChannel = dupeType = hostDupeVal = 0; // 8bb: prevent stupid compiler warning...
+
+		bool doDupeCheck = false;
+		if (!skipMIDITest && hc->Smp == 101)
+		{
+			// 8bb: MIDI note, do a "duplicate note" check regardless of instrument's DCT setting
+			hostChannel = hc->MCh;
+			dupeType = DCT_NOTE;
+			hostDupeVal = hc->Nt2;
+
+			doDupeCheck = true;
+		}
+		else if (ins->DCT != DCT_DISABLED)
+		{
+			hostChannel = hc->HCN | CHN_DISOWNED; // 8bb: only search disowned host channels
+			dupeType = ins->DCT;
+
+			if (ins->DCT == DCT_NOTE)
+			{
+				hostDupeVal = hc->Nte;
+			}
+			else if (ins->DCT == DCT_INSTRUMENT)
+			{
+				hostDupeVal = hc->Ins;
+			}
+			else
+			{
+				/* 8bb:
+				** .ITs from OpenMPT can have DCT=4, which tests for duplicate instrument plugins.
+				** This will be handled as DCA_SAMPLE in Impulse Tracker. Oops...
+				*/
+				hostDupeVal = hc->Smp - 1;
+				if ((int8_t)hostDupeVal < 0)
+					break; // 8bb: illegal (or no) sample, ignore dupe test and find available voice now
+			}
+
+			doDupeCheck = true;
+		}
+
+		if (doDupeCheck) // 8bb: NNA Duplicate Check
+		{
+			sc = AllocateSlaveOffset;
+			if (DuplicateCheck(&sc, hc, hostChannel, ins, dupeType, hostDupeVal))
+			{
+				// 8bb: dupe found!
+
+				scInitialized = true; // 8bb: we have an sc pointer now (we could come from a shutdown host channel)
+				if (ins->DCA == DCA_NOTE_CUT)
+				{
+					NNAType = NNA_NOTE_CUT;
+				}
+				else
+				{
+					sc->DCT = DCT_DISABLED; // 8bb: turn of dupe check so that we don't do infinite NNA tests :)
+					sc->DCA = DCA_NOTE_CUT;
+					NNAType = ins->DCA + 1;
+				}
+
+				continue; // 8bb: do another NNA test with the new NNA type
+			}
+		}
+
+		break; // NNA handling done, find available voice now
 	}
-
-	if (sc->DCA == ins->DCA)
-	{
-		if (ins->DCA == 0) // Checks for hiqual
-			goto AllocateChannel20Samples;
-
-		sc->DCT = 0;
-		sc->DCA = 0;
-
-		NNAType = ins->DCA + 1;
-		goto AllocateHandleNNA;
-	}
-
-DupeCheckNextChannel:
-	sc++;
-	loopCounter--;
-	if (loopCounter != 0)
-		goto DupeCheckLoop;
-
-FindAvailableVoice:
 
 	// 8bb: search for inactive channels
 
@@ -910,7 +930,8 @@ FindAvailableVoice:
 	if (sc != NULL)
 		return AllocateChannelInstrument(hc, sc, ins, hcFlags);
 
-	/* Find out which host channel has the most (disowned) slave channels.
+	/*
+	** Find out which host channel has the most (disowned) slave channels.
 	** Then find the softest non-single sample in that channel.
 	*/
 
