@@ -77,48 +77,39 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 		Music_FreeSong();
 	}
 
-	uint8_t Format = GetModuleType(m);
-	if (Format == FORMAT_UNKNOWN)
-		goto Error;
-
-	Music_SetDefaultMIDIDataArea();
-
 	bool WasLoaded = false;
-	switch (Format)
+
+	uint8_t Format = GetModuleType(m);
+	if (Format != FORMAT_UNKNOWN)
 	{
-		default: goto Error;
-
-		case FORMAT_IT:
-			WasLoaded = LoadIT(m);
-			break;
-
-		case FORMAT_S3M:
-			WasLoaded = LoadS3M(m);
-			break;
+		Music_SetDefaultMIDIDataArea();
+		switch (Format)
+		{
+			default: break;
+			case FORMAT_IT:  WasLoaded = LoadIT(m);  break;
+			case FORMAT_S3M: WasLoaded = LoadS3M(m); break;
+		}
 	}
-
-	if (!WasLoaded)
-		goto Error;
 
 	mclose(&m);
 	if (WasCompressed)
 		free(Data);
 
-	DriverSetMixVolume(Song.Header.MixVolume);
-	DriverFixSamples();
+	if (WasLoaded)
+	{
+		DriverSetMixVolume(Song.Header.MixVolume);
+		DriverFixSamples();
 
-	Song.Loaded = true;
-	return true;
+		Song.Loaded = true;
+		return true;
+	}
+	else
+	{
+		Music_FreeSong();
 
-Error:
-	if (m != NULL)
-		mclose(&m);
-
-	if (WasCompressed)
-		free(Data);
-
-	Music_FreeSong();
-	return false;
+		Song.Loaded = false;
+		return false;
+	}
 }
 
 bool Music_LoadFromFile(const char *Filename)
