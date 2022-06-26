@@ -738,12 +738,8 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 
 	instrument_t *ins = &Song.Ins[hc->Ins-1];
 
-	bool scInitialized = true;
-	if (!((*hcFlags) & HF_CHAN_ON)) // 8bb: host channel on?
-	{
-		scInitialized = false;
-	}
-	else
+	bool scInitialized = false;
+	if ((*hcFlags) & HF_CHAN_ON) // 8bb: host channel on?
 	{
 		sc = (slaveChn_t *)hc->SCOffst;
 		if (sc->InsOffs == ins) // 8bb: slave channel has same inst. as host channel?
@@ -752,6 +748,8 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		NNAType = sc->NNA;
 		if (NNAType != NNA_NOTE_CUT) // 8bb: not note-cut
 			sc->HCN |= CHN_DISOWNED; // Disown channel
+
+		scInitialized = true;
 	}
 
 	while (true) // New note action handling...
