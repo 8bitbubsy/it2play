@@ -828,7 +828,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			{
 				/* 8bb:
 				** .ITs from OpenMPT can have DCT=4, which tests for duplicate instrument plugins.
-				** This will be handled as DCA_SAMPLE in Impulse Tracker. Oops...
+				** This will be handled as DCT_SAMPLE in Impulse Tracker. Oops...
 				*/
 				hostDupeVal = hc->Smp - 1;
 				if ((int8_t)hostDupeVal < 0)
