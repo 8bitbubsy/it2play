@@ -222,13 +222,19 @@ typedef struct it_header_t
 
 typedef struct // 8bb: custom struct
 {
-	bool StartNoRamp; // 8bb: for "WAV writer" driver
 	uint32_t NumChannels;
 	uint8_t Type, Flags, FilterParameters[128];
 	uint32_t MixMode, MixSpeed;
 	int32_t Delta;
 	int64_t Delta64;
 	float QualityFactorTable[128], FreqParameterMultiplier, FreqMultiplier;
+
+	float *fCubicLUT, fLastLeftValue, fLastRightValue; // 8bb: for HQ driver
+
+	// 8bb: for "WAV writer" driver
+	bool StartNoRamp;
+	int32_t LastLeftValue, LastRightValue;
+	// -----------------------------
 } driver_t;
 
 typedef struct song_t

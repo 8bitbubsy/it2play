@@ -369,8 +369,8 @@ static void WAVWriter_MixSamples(void)
 
 							// 8bb: sample ended, ramp out very last sample point for the remaining samples
 
-							int32_t L = -LastLeftValue;
-							int32_t R = -LastRightValue;
+							int32_t L = -Driver.LastLeftValue;
+							int32_t R = -Driver.LastRightValue;
 
 							for (; MixBlockSize > 0; MixBlockSize--)
 							{

@@ -42,15 +42,13 @@ static uint32_t BytesToMixFractional, CurrentFractional, RandSeed;
 static float *fMixBuffer, fLastClickRemovalLeft, fLastClickRemovalRight;
 static double dFreq2DeltaMul, dPrngStateL, dPrngStateR;
 
-float *fCubicLUT;
-
 static bool InitCubicSplineLUT(void)
 {
-	fCubicLUT = (float *)malloc(CUBIC_PHASES * CUBIC_WIDTH * sizeof (float));
-	if (fCubicLUT == NULL)
+	Driver.fCubicLUT = (float *)malloc(CUBIC_PHASES * CUBIC_WIDTH * sizeof (float));
+	if (Driver.fCubicLUT == NULL)
 		return false;
 
-	float *fLUTPtr = fCubicLUT;
+	float *fLUTPtr = Driver.fCubicLUT;
 	for (int32_t i = 0; i < CUBIC_PHASES; i++)
 	{
 		const double x = i * (1.0 / CUBIC_PHASES);
@@ -90,8 +88,6 @@ static void HQ_MixSamples(void)
 		fLastClickRemovalLeft  -= fLastClickRemovalLeft  * (1.0f / 4096.0f);
 		fLastClickRemovalRight -= fLastClickRemovalRight * (1.0f / 4096.0f);
 	}
-
-	//memset(fMixBuffer, 0, RealBytesToMix * 2 * sizeof (float));
 
 	slaveChn_t *sc = sChn;
 	for (uint32_t i = 0; i < Driver.NumChannels; i++, sc++)
@@ -219,7 +215,7 @@ static void HQ_MixSamples(void)
 						SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | (uint32_t)sc->Frac64) / sc->Delta64) + 1);
 						Driver.Delta64 = 0 - sc->Delta64;
 					}
-					else // 8bb: forwards
+					else // forwards
 					{
 						SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 
@@ -252,7 +248,7 @@ static void HQ_MixSamples(void)
 							}
 						}
 					}
-					else // 8bb: forwards
+					else // forwards
 					{
 						if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 						{
@@ -291,7 +287,7 @@ static void HQ_MixSamples(void)
 						sc->SamplingPosition = sc->LoopBeg + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 				}
 			}
-			else // 8bb: no loop
+			else // no loop
 			{
 				while (MixBlockSize > 0)
 				{
@@ -316,16 +312,16 @@ static void HQ_MixSamples(void)
 						// sample ended, ramp out very last sample point for the remaining samples
 						for (; MixBlockSize > 0; MixBlockSize--)
 						{
-							*fMixBufferPtr++ += fLastLeftValue;
-							*fMixBufferPtr++ += fLastRightValue;
+							*fMixBufferPtr++ += Driver.fLastLeftValue;
+							*fMixBufferPtr++ += Driver.fLastRightValue;
 
-							fLastLeftValue  -= fLastLeftValue  * (1.0f / 4096.0f);
-							fLastRightValue -= fLastRightValue * (1.0f / 4096.0f);
+							Driver.fLastLeftValue  -= Driver.fLastLeftValue  * (1.0f / 4096.0f);
+							Driver.fLastRightValue -= Driver.fLastRightValue * (1.0f / 4096.0f);
 						}
 
 						// update anti-click value for next mixing session
-						fLastClickRemovalLeft  += fLastLeftValue;
-						fLastClickRemovalRight += fLastRightValue;
+						fLastClickRemovalLeft  += Driver.fLastLeftValue;
+						fLastClickRemovalRight += Driver.fLastRightValue;
 
 						break;
 					}
@@ -610,10 +606,10 @@ static void HQ_CloseDriver(void)
 		fMixBuffer = NULL;
 	}
 
-	if (fCubicLUT != NULL)
+	if (Driver.fCubicLUT != NULL)
 	{
-		free(fCubicLUT);
-		fCubicLUT = NULL;
+		free(Driver.fCubicLUT);
+		Driver.fCubicLUT = NULL;
 	}
 
 	DriverClose = NULL;

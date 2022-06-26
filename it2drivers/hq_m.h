@@ -19,6 +19,4 @@
 
 typedef void (*MixFunc_t)(slaveChn_t *sc, float *fMixBufPtr, int32_t numSamples);
 
-extern float fLastLeftValue, fLastRightValue;
-
 extern const MixFunc_t HQ_MixFunctionTables[16];

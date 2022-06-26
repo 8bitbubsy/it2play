@@ -42,16 +42,16 @@ static void Mix32Surround16Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSa
 	sample = ApplyCompressorAndQuantize(fSample);
 
 #define MixSample \
-	LastLeftValue  = sample * sc->CurrVolL; \
-	LastRightValue = sample * sc->CurrVolR; \
-	MixBufPtr[0] -= LastLeftValue; \
-	MixBufPtr[1] -= LastRightValue; \
+	Driver.LastLeftValue  = sample * sc->CurrVolL; \
+	Driver.LastRightValue = sample * sc->CurrVolR; \
+	MixBufPtr[0] -= Driver.LastLeftValue; \
+	MixBufPtr[1] -= Driver.LastRightValue; \
 	MixBufPtr += 2; \
 
 #define MixSampleSurround \
-	LastLeftValue = sample * sc->CurrVolL; \
-	MixBufPtr[0] -= LastLeftValue; \
-	MixBufPtr[1] += LastLeftValue; \
+	Driver.LastLeftValue = sample * sc->CurrVolL; \
+	MixBufPtr[0] -= Driver.LastLeftValue; \
+	MixBufPtr[1] += Driver.LastLeftValue; \
 	MixBufPtr += 2; \
 
 #define RampCurrVolumeL \
@@ -98,8 +98,6 @@ const mixFunc WAVWriter_MixFunctionTables[4] =
 	(mixFunc)Mix32Surround8Bit,
 	(mixFunc)Mix32Surround16Bit
 };
-
-int32_t LastLeftValue, LastRightValue; // 8bb: globalized
 
 // 8bb: these two have very small rounding errors, so I keep them as IT2 constants
 static const float Const256On6 = 42.6666641f;
@@ -297,7 +295,7 @@ static void Mix32Surround8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSam
 		Mix32Surround8Bit_M
 	}
 
-	LastRightValue = -LastLeftValue;
+	Driver.LastRightValue = -Driver.LastLeftValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
@@ -322,7 +320,7 @@ static void Mix32Surround16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSa
 		Mix32Surround16Bit_M
 	}
 
-	LastRightValue = -LastLeftValue;
+	Driver.LastRightValue = -Driver.LastLeftValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }

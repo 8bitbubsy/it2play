@@ -50,20 +50,20 @@ static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, in
 	sc->fOldSamples[2] = fSampleR;
 
 #define Get8BitWaveForm \
-	t = (float *)fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
+	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
 	CubicSplineInterpolation(fSample, smp, t, 128.0f); \
 
 #define Get16BitWaveForm \
-	t = (float *)fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
+	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
 	CubicSplineInterpolation(fSample, smp, t, 32768.0f); \
 
 #define Get8BitStereoWaveForm \
-	t = (float *)fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
+	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
 	CubicSplineInterpolation(fSample,  smp,  t, 128.0f); \
 	CubicSplineInterpolation(fSampleR, smpR, t, 128.0f);
 
 #define Get16BitStereoWaveForm \
-	t = (float *)fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
+	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
 	CubicSplineInterpolation(fSample,  smp,  t, 32768.0f); \
 	CubicSplineInterpolation(fSampleR, smpR, t, 32768.0f);
 
@@ -84,30 +84,30 @@ static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, in
 	FilterStereoSample
 
 #define MixSample \
-	fLastLeftValue  = fSample * sc->fCurrVolL; \
-	fLastRightValue = fSample * sc->fCurrVolR; \
-	fMixBufPtr[0] += fLastLeftValue; \
-	fMixBufPtr[1] += fLastRightValue; \
+	Driver.fLastLeftValue  = fSample * sc->fCurrVolL; \
+	Driver.fLastRightValue = fSample * sc->fCurrVolR; \
+	fMixBufPtr[0] += Driver.fLastLeftValue; \
+	fMixBufPtr[1] += Driver.fLastRightValue; \
 	fMixBufPtr += 2; \
 
 #define MixSampleSurround \
-	fLastLeftValue = fSample * sc->fCurrVolL; \
-	fMixBufPtr[0] += fLastLeftValue; \
-	fMixBufPtr[1] -= fLastLeftValue; \
+	Driver.fLastLeftValue = fSample * sc->fCurrVolL; \
+	fMixBufPtr[0] += Driver.fLastLeftValue; \
+	fMixBufPtr[1] -= Driver.fLastLeftValue; \
 	fMixBufPtr += 2; \
 
 #define MixStereoSample \
-	fLastLeftValue  = fSample  * sc->fCurrVolL; \
-	fLastRightValue = fSampleR * sc->fCurrVolR; \
-	fMixBufPtr[0] += fLastLeftValue; \
-	fMixBufPtr[1] += fLastRightValue; \
+	Driver.fLastLeftValue  = fSample  * sc->fCurrVolL; \
+	Driver.fLastRightValue = fSampleR * sc->fCurrVolR; \
+	fMixBufPtr[0] += Driver.fLastLeftValue; \
+	fMixBufPtr[1] += Driver.fLastRightValue; \
 	fMixBufPtr += 2; \
 
 #define MixStereoSampleSurround \
-	fLastLeftValue  = fSample  * sc->fCurrVolL; \
-	fLastRightValue = fSampleR * sc->fCurrVolL; \
-	fMixBufPtr[0] += fLastLeftValue; \
-	fMixBufPtr[1] -= fLastRightValue; \
+	Driver.fLastLeftValue  = fSample  * sc->fCurrVolL; \
+	Driver.fLastRightValue = fSampleR * sc->fCurrVolL; \
+	fMixBufPtr[0] += Driver.fLastLeftValue; \
+	fMixBufPtr[1] -= Driver.fLastRightValue; \
 	fMixBufPtr += 2; \
 
 #define RampCurrVolumeL \
@@ -252,10 +252,6 @@ const MixFunc_t HQ_MixFunctionTables[16] =
 	(MixFunc_t)MixFilteredSurround16BitStereo
 };
 
-extern float *fCubicLUT; // hq.c
-
-float fLastLeftValue, fLastRightValue; // 8bb: globalized
-
 static void Mix8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
 	sample_t *s = sc->SmpOffs;
@@ -325,7 +321,7 @@ static void MixSurround8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSample
 		MixSurround8Bit_M
 	}
 
-	fLastRightValue = -fLastLeftValue;
+	Driver.fLastRightValue = -Driver.fLastLeftValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
@@ -351,7 +347,7 @@ static void MixSurround16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSampl
 		MixSurround16Bit_M
 	}
 
-	fLastRightValue = -fLastLeftValue;
+	Driver.fLastRightValue = -Driver.fLastLeftValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
@@ -434,7 +430,7 @@ static void MixSurround8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t Num
 		MixSurround8BitStereo_M
 	}
 
-	fLastRightValue = -fLastRightValue;
+	Driver.fLastRightValue = -Driver.fLastRightValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
@@ -463,7 +459,7 @@ static void MixSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t Nu
 		MixSurround16BitStereo_M
 	}
 
-	fLastRightValue = -fLastRightValue;
+	Driver.fLastRightValue = -Driver.fLastRightValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
@@ -537,7 +533,7 @@ static void MixFilteredSurround8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t N
 		MixFilteredSurround8Bit_M
 	}
 
-	fLastRightValue = -fLastLeftValue;
+	Driver.fLastRightValue = -Driver.fLastLeftValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
@@ -563,7 +559,7 @@ static void MixFilteredSurround16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t 
 		MixFilteredSurround16Bit_M
 	}
 
-	fLastRightValue = -fLastLeftValue;
+	Driver.fLastRightValue = -Driver.fLastLeftValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
@@ -646,7 +642,7 @@ static void MixFilteredSurround8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int
 		MixFilteredSurround8BitStereo_M
 	}
 
-	fLastRightValue = -fLastRightValue;
+	Driver.fLastRightValue = -Driver.fLastRightValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
@@ -675,7 +671,7 @@ static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, in
 		MixFilteredSurround16BitStereo_M
 	}
 
-	fLastRightValue = -fLastRightValue;
+	Driver.fLastRightValue = -Driver.fLastRightValue;
 
 	sc->SamplingPosition = (int32_t)(smp - base);
 }
