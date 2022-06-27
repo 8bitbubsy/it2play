@@ -74,8 +74,8 @@ static void WAVWriter_MixSamples(void)
 			if ((uint32_t)sc->Frequency>>MIX_FRAC_BITS >= Driver.MixSpeed)
 			{
 				sc->Flags = SF_NOTE_STOP;
-				if (!(sc->HCN & CHN_DISOWNED))
-					((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON; // Turn off channel
+				if (!(sc->HostChnNum & CHN_DISOWNED))
+					((hostChn_t *)sc->HostChnPtr)->Flags &= ~HF_CHAN_ON; // Turn off channel
 
 				continue;
 			}
@@ -83,7 +83,7 @@ static void WAVWriter_MixSamples(void)
 			// 8bb: calculate mixer delta
 			uint32_t Quotient = (uint32_t)sc->Frequency / Driver.MixSpeed;
 			uint32_t Remainder = (uint32_t)sc->Frequency % Driver.MixSpeed;
-			sc->Delta = (Quotient << MIX_FRAC_BITS) | (uint16_t)((Remainder << MIX_FRAC_BITS) / Driver.MixSpeed);
+			sc->Delta32 = (Quotient << MIX_FRAC_BITS) | (uint16_t)((Remainder << MIX_FRAC_BITS) / Driver.MixSpeed);
 		}
 
 		if (sc->Flags & SF_NEW_NOTE)
@@ -102,21 +102,21 @@ static void WAVWriter_MixSamples(void)
 		{
 			uint8_t FilterQ;
 
-			if (sc->HCN & CHN_DISOWNED)
+			if (sc->HostChnNum & CHN_DISOWNED)
 			{
-				FilterQ = sc->MBank >> 8; // Disowned? Then use channel filters.
+				FilterQ = sc->MIDIBank >> 8; // Disowned? Then use channel filters.
 			}
 			else
 			{
-				uint8_t filterCutOff = Driver.FilterParameters[sc->HCN];
-				FilterQ = Driver.FilterParameters[64+sc->HCN];
+				uint8_t filterCutOff = Driver.FilterParameters[sc->HostChnNum];
+				FilterQ = Driver.FilterParameters[64+sc->HostChnNum];
 
 				sc->VEnvState.CurNode = (filterCutOff << 8) | (sc->VEnvState.CurNode & 0x00FF);
-				sc->MBank = (FilterQ << 8) | (sc->MBank & 0x00FF);
+				sc->MIDIBank = (FilterQ << 8) | (sc->MIDIBank & 0x00FF);
 			}
 
 			// 8bb: FilterEnvVal (0..255) * CutOff (0..127)
-			const uint16_t FilterFreqValue = (sc->MBank & 0x00FF) * (uint8_t)((uint16_t)sc->VEnvState.CurNode >> 8);
+			const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VEnvState.CurNode >> 8);
 			if (FilterFreqValue != 127*255 || FilterQ != 0)
 			{
 				assert(FilterFreqValue <= 127*255 && FilterQ <= 127);
@@ -158,18 +158,18 @@ static void WAVWriter_MixSamples(void)
 			{
 				sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 8; // 8bb: 0..16384
 			}
-			else if (sc->FPP == PAN_SURROUND)
+			else if (sc->FinalPlayPan == PAN_SURROUND)
 			{
 				sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 9; // 8bb: 0..8192
 			}
 			else // 8bb: normal (panned)
 			{
-				sc->LeftVolume  = ((64-sc->FPP) * MixVolume * sc->vol16Bit) >> 14; // 8bb: 0..16384
-				sc->RightVolume = (    sc->FPP  * MixVolume * sc->vol16Bit) >> 14;
+				sc->LeftVolume  = ((64-sc->FinalPlayPan) * MixVolume * sc->vol16Bit) >> 14; // 8bb: 0..16384
+				sc->RightVolume = (    sc->FinalPlayPan  * MixVolume * sc->vol16Bit) >> 14;
 			}
 		}
 
-		if (sc->Delta == 0) // 8bb: added this protection just in case (shouldn't happen)
+		if (sc->Delta32 == 0) // 8bb: added this protection just in case (shouldn't happen)
 			continue;
 
 		bool UseZeroVolMix = false;
@@ -192,9 +192,9 @@ static void WAVWriter_MixSamples(void)
 			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // 8bb: also length for non-loopers
 			if ((int32_t)LoopLength > 0)
 			{
-				if (sc->LpM == LOOP_PINGPONG)
+				if (sc->LoopMode == LOOP_PINGPONG)
 					UpdatePingPongLoop(sc, MixBlockSize);
-				else if (sc->LpM == LOOP_FORWARDS)
+				else if (sc->LoopMode == LOOP_FORWARDS)
 					UpdateForwardsLoop(sc, MixBlockSize);
 				else
 					UpdateNoLoop(sc, MixBlockSize);
@@ -202,8 +202,8 @@ static void WAVWriter_MixSamples(void)
 		}
 		else // 8bb: regular mixing
 		{
-			const bool Surround = (sc->FPP == PAN_SURROUND);
-			const bool Sample16Bit = !!(sc->Bit & SMPF_16BIT);
+			const bool Surround = (sc->FinalPlayPan == PAN_SURROUND);
+			const bool Sample16Bit = !!(sc->SmpBitDepth & SMPF_16BIT);
 			mixFunc Mix = WAVWriter_MixFunctionTables[(Surround << 1) + Sample16Bit];
 			assert(Mix != NULL);
 
@@ -247,22 +247,22 @@ static void WAVWriter_MixSamples(void)
 			if ((int32_t)LoopLength > 0)
 			{
 				int32_t *MixBufferPtr = MixBuffer;
-				if (sc->LpM == LOOP_PINGPONG)
+				if (sc->LoopMode == LOOP_PINGPONG)
 				{
 					while (MixBlockSize > 0)
 					{
 						uint32_t NewLoopPos;
 
 						uint32_t SamplesToMix;
-						if (sc->LpD == DIR_BACKWARDS)
+						if (sc->LoopDirection == DIR_BACKWARDS)
 						{
 							SamplesToMix = sc->SamplingPosition - (sc->LoopBeg + 1);
 #if CPU_32BIT
 							if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 								SamplesToMix = UINT16_MAX;
 #endif
-							SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->SmpError) / sc->Delta) + 1;
-							Driver.Delta = 0 - sc->Delta;
+							SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
+							Driver.Delta32 = 0 - sc->Delta32;
 						}
 						else // 8bb: forwards
 						{
@@ -271,8 +271,8 @@ static void WAVWriter_MixSamples(void)
 							if (SamplesToMix > UINT16_MAX)
 								SamplesToMix = UINT16_MAX;
 #endif
-							SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
-							Driver.Delta = sc->Delta;
+							SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
+							Driver.Delta32 = sc->Delta32;
 						}
 
 						if (SamplesToMix > MixBlockSize)
@@ -283,7 +283,7 @@ static void WAVWriter_MixSamples(void)
 						MixBlockSize -= SamplesToMix;
 						MixBufferPtr += SamplesToMix << 1;
 
-						if (sc->LpD == DIR_BACKWARDS)
+						if (sc->LoopDirection == DIR_BACKWARDS)
 						{
 							if (sc->SamplingPosition <= sc->LoopBeg)
 							{
@@ -294,9 +294,9 @@ static void WAVWriter_MixSamples(void)
 								}
 								else
 								{
-									sc->LpD = DIR_FORWARDS;
+									sc->LoopDirection = DIR_FORWARDS;
 									sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
-									sc->SmpError = (uint16_t)(0 - sc->SmpError);
+									sc->Frac32 = (uint16_t)(0 - sc->Frac32);
 								}
 							}
 						}
@@ -311,15 +311,15 @@ static void WAVWriter_MixSamples(void)
 								}
 								else
 								{
-									sc->LpD = DIR_BACKWARDS;
+									sc->LoopDirection = DIR_BACKWARDS;
 									sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
-									sc->SmpError = (uint16_t)(0 - sc->SmpError);
+									sc->Frac32 = (uint16_t)(0 - sc->Frac32);
 								}
 							}
 						}
 					}
 				}
-				else if (sc->LpM == LOOP_FORWARDS)
+				else if (sc->LoopMode == LOOP_FORWARDS)
 				{
 					while (MixBlockSize > 0)
 					{
@@ -328,11 +328,11 @@ static void WAVWriter_MixSamples(void)
 						if (SamplesToMix > UINT16_MAX)
 							SamplesToMix = UINT16_MAX;
 #endif
-						SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
+						SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 
-						Driver.Delta = sc->Delta;
+						Driver.Delta32 = sc->Delta32;
 						Mix(sc, MixBufferPtr, SamplesToMix);
 
 						MixBlockSize -= SamplesToMix;
@@ -351,11 +351,11 @@ static void WAVWriter_MixSamples(void)
 						if (SamplesToMix > UINT16_MAX)
 							SamplesToMix = UINT16_MAX;
 #endif
-						SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->SmpError ^ MIX_FRAC_MASK)) / sc->Delta) + 1;
+						SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 
-						Driver.Delta = sc->Delta;
+						Driver.Delta32 = sc->Delta32;
 						Mix(sc, MixBufferPtr, SamplesToMix);
 
 						MixBlockSize -= SamplesToMix;
@@ -364,8 +364,8 @@ static void WAVWriter_MixSamples(void)
 						if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 						{
 							sc->Flags = SF_NOTE_STOP;
-							if (!(sc->HCN & CHN_DISOWNED))
-								((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON; // Signify channel of
+							if (!(sc->HostChnNum & CHN_DISOWNED))
+								((hostChn_t *)sc->HostChnPtr)->Flags &= ~HF_CHAN_ON; // Signify channel of
 
 							// 8bb: sample ended, ramp out very last sample point for the remaining samples
 

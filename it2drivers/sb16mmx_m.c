@@ -15,7 +15,7 @@ static void M32Bit8MF(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 static void M32Bit16MF(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 
 #define Get8BitWaveForm \
-	frac = sc->SmpError >> 1; \
+	frac = sc->Frac32 >> 1; \
 	sample = smp[0]; \
 	sample2 = smp[1]; \
 	sample = (sample << 8) | (uint8_t)sample; \
@@ -26,14 +26,14 @@ static void M32Bit16MF(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 	sample = (sample + sample2) >> (MIX_FRAC_BITS-1);
 
 #define Get16BitWaveForm \
-	frac = sc->SmpError >> 1; \
+	frac = sc->Frac32 >> 1; \
 	sample2 = smp[1] * frac; \
 	frac ^= MIX_FRAC_MASK>>1; \
 	sample = smp[0] * frac; \
 	sample = (sample + sample2) >> (MIX_FRAC_BITS-1);
 
 #define Get8BitWaveFormFiltered /* 8bb: result is 15-bit for filter to work properly */ \
-	frac = sc->SmpError >> 1; \
+	frac = sc->Frac32 >> 1; \
 	sample = smp[0]; \
 	sample2 = smp[1]; \
 	sample = (sample << 8) | (uint8_t)sample; \
@@ -44,7 +44,7 @@ static void M32Bit16MF(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 	sample = (sample + sample2) >> MIX_FRAC_BITS;
 
 #define Get16BitWaveFormFiltered /* 8bb: result is 15-bit for filter to work properly */ \
-	frac = sc->SmpError >> 1; \
+	frac = sc->Frac32 >> 1; \
 	sample2 = smp[1] * frac; \
 	frac ^= MIX_FRAC_MASK>>1; \
 	sample = smp[0] * frac; \
@@ -70,9 +70,9 @@ static void M32Bit16MF(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 	sc->CurrVolR += (sc->DestVolR - sc->CurrVolR) >> (RAMPSPEED-1);
 
 #define UpdatePos \
-	sc->SmpError += Driver.Delta; \
-	smp += (int32_t)sc->SmpError >> MIX_FRAC_BITS; \
-	sc->SmpError &= MIX_FRAC_MASK;
+	sc->Frac32 += Driver.Delta32; \
+	smp += (int32_t)sc->Frac32 >> MIX_FRAC_BITS; \
+	sc->Frac32 &= MIX_FRAC_MASK;
 
 #define M32Bit8M_M \
 	sample = (*smp) << 8; \
@@ -192,7 +192,7 @@ const mixFunc SB16MMX_MixFunctionTables[8] =
 
 static void M32Bit8M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
@@ -216,7 +216,7 @@ static void M32Bit8M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 static void M32Bit16M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
@@ -240,7 +240,7 @@ static void M32Bit16M(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 static void M32Bit8MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
@@ -264,7 +264,7 @@ static void M32Bit8MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 static void M32Bit16MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
@@ -290,7 +290,7 @@ static void M32Bit16MI(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 static void M32Bit8MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
@@ -317,7 +317,7 @@ static void M32Bit8MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 static void M32Bit16MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
@@ -344,7 +344,7 @@ static void M32Bit16MV(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 static void M32Bit8MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;
@@ -371,7 +371,7 @@ static void M32Bit8MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 
 static void M32Bit16MF(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample, sample2, frac;

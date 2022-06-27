@@ -141,19 +141,19 @@ bool LoadIT(MEMFILE *m)
 			if (!ReadBytes(m, &ins->DCT, 1)) return false;
 			if (!ReadBytes(m, &ins->DCA, 1)) return false;
 			if (!ReadBytes(m, &ins->FadeOut, 2)) return false;
-			if (!ReadBytes(m, &ins->PPS, 1)) return false;
-			if (!ReadBytes(m, &ins->PPC, 1)) return false;
-			if (!ReadBytes(m, &ins->GbV, 1)) return false;
-			if (!ReadBytes(m, &ins->DfP, 1)) return false;
-			if (!ReadBytes(m, &ins->RV, 1)) return false;
-			if (!ReadBytes(m, &ins->RP, 1)) return false;
+			if (!ReadBytes(m, &ins->PitchPanSep, 1)) return false;
+			if (!ReadBytes(m, &ins->PitchPanCenter, 1)) return false;
+			if (!ReadBytes(m, &ins->GlobVol, 1)) return false;
+			if (!ReadBytes(m, &ins->DefPan, 1)) return false;
+			if (!ReadBytes(m, &ins->RandVol, 1)) return false;
+			if (!ReadBytes(m, &ins->RandPan, 1)) return false;
 			mseek(m, 4, SEEK_CUR); // skip unwanted stuff
 			if (!ReadBytes(m, ins->InstrumentName, 26)) return false;
-			if (!ReadBytes(m, &ins->IFC, 1)) return false;
-			if (!ReadBytes(m, &ins->IFR, 1)) return false;
-			if (!ReadBytes(m, &ins->MCh, 1)) return false;
-			if (!ReadBytes(m, &ins->MPr, 1)) return false;
-			if (!ReadBytes(m, &ins->MIDIBnk, 2)) return false;
+			if (!ReadBytes(m, &ins->FilterCutoff, 1)) return false;
+			if (!ReadBytes(m, &ins->FilterResonance, 1)) return false;
+			if (!ReadBytes(m, &ins->MIDIChn, 1)) return false;
+			if (!ReadBytes(m, &ins->MIDIProg, 1)) return false;
+			if (!ReadBytes(m, &ins->MIDIBank, 2)) return false;
 			if (!ReadBytes(m, &ins->SmpNoteTable, 2*120)) return false;
 
 			// just in case
@@ -165,16 +165,16 @@ bool LoadIT(MEMFILE *m)
 			{
 				env_t *env;
 
-				     if (j == 0) env = &ins->VEnvelope;
-				else if (j == 1) env = &ins->PEnvelope;
-				else             env = &ins->PtEnvelope;
+				     if (j == 0) env = &ins->VolEnv;
+				else if (j == 1) env = &ins->PanEnv;
+				else             env = &ins->PitchEnv;
 
 				if (!ReadBytes(m, &env->Flags, 1)) return false;
 				if (!ReadBytes(m, &env->Num, 1)) return false;
-				if (!ReadBytes(m, &env->LpB, 1)) return false;
-				if (!ReadBytes(m, &env->LpE, 1)) return false;
-				if (!ReadBytes(m, &env->SLB, 1)) return false;
-				if (!ReadBytes(m, &env->SLE, 1)) return false;
+				if (!ReadBytes(m, &env->LoopBeg, 1)) return false;
+				if (!ReadBytes(m, &env->LoopEnd, 1)) return false;
+				if (!ReadBytes(m, &env->SusLoopBeg, 1)) return false;
+				if (!ReadBytes(m, &env->SusLoopEnd, 1)) return false;
 
 				envNode_t *node = env->NodePoints;
 				for (uint32_t k = 0; k < 25; k++, node++)
@@ -190,11 +190,11 @@ bool LoadIT(MEMFILE *m)
 		{
 			mseek(m, 4, SEEK_CUR); // skip unwanted stuff
 			if (!ReadBytes(m, ins->DOSFilename, 13)) return false;
-			if (!ReadBytes(m, &ins->VEnvelope.Flags, 1)) return false;
-			if (!ReadBytes(m, &ins->VEnvelope.LpB, 1)) return false;
-			if (!ReadBytes(m, &ins->VEnvelope.LpE, 1)) return false;
-			if (!ReadBytes(m, &ins->VEnvelope.SLB, 1)) return false;
-			if (!ReadBytes(m, &ins->VEnvelope.SLE, 1)) return false;
+			if (!ReadBytes(m, &ins->VolEnv.Flags, 1)) return false;
+			if (!ReadBytes(m, &ins->VolEnv.LoopBeg, 1)) return false;
+			if (!ReadBytes(m, &ins->VolEnv.LoopEnd, 1)) return false;
+			if (!ReadBytes(m, &ins->VolEnv.SusLoopBeg, 1)) return false;
+			if (!ReadBytes(m, &ins->VolEnv.SusLoopEnd, 1)) return false;
 			mseek(m, 2, SEEK_CUR); // skip unwanted stuff
 			if (!ReadBytes(m, &ins->FadeOut, 2)) return false;
 			if (!ReadBytes(m, &ins->NNA, 1)) return false;
@@ -211,9 +211,9 @@ bool LoadIT(MEMFILE *m)
 			ins->InstrumentName[25] = '\0';
 
 			// set default values not present in old instrument
-			ins->PPC = 60;
-			ins->GbV = 128;
-			ins->DfP = 32 + 128; // center + pan disabled
+			ins->PitchPanCenter = 60;
+			ins->GlobVol = 128;
+			ins->DefPan = 32 + 128; // center + pan disabled
 
 			mseek(m, 200, SEEK_CUR);
 
@@ -222,7 +222,7 @@ bool LoadIT(MEMFILE *m)
 			for (j = 0; j < 25; j++)
 			{
 				uint16_t word;
-				envNode_t *node = &ins->VEnvelope.NodePoints[j];
+				envNode_t *node = &ins->VolEnv.NodePoints[j];
 
 				if (!ReadBytes(m, &word, 2)) return false;
 				if (word == 0xFFFF)
@@ -232,13 +232,13 @@ bool LoadIT(MEMFILE *m)
 				node->Magnitude = word >> 8;
 			}
 
-			ins->VEnvelope.Num = j;
+			ins->VolEnv.Num = j;
 
-			ins->PEnvelope.Num = 2;
-			ins->PEnvelope.NodePoints[1].Tick = 99;
+			ins->PanEnv.Num = 2;
+			ins->PanEnv.NodePoints[1].Tick = 99;
 
-			ins->PtEnvelope.Num = 2;
-			ins->PtEnvelope.NodePoints[1].Tick = 99;
+			ins->PitchEnv.Num = 2;
+			ins->PitchEnv.NodePoints[1].Tick = 99;
 		}
 	}
 
@@ -268,12 +268,12 @@ bool LoadIT(MEMFILE *m)
 
 		mseek(m, 4, SEEK_CUR); // skip unwanted stuff
 		if (!ReadBytes(m, s->DOSFilename, 13)) return false;
-		if (!ReadBytes(m, &s->GvL, 1)) return false;
+		if (!ReadBytes(m, &s->GlobVol, 1)) return false;
 		if (!ReadBytes(m, &s->Flags, 1)) return false;
 		if (!ReadBytes(m, &s->Vol, 1)) return false;
 		if (!ReadBytes(m, s->SampleName, 26)) return false;
 		if (!ReadBytes(m, &s->Cvt, 1)) return false;
-		if (!ReadBytes(m, &s->DfP, 1)) return false;
+		if (!ReadBytes(m, &s->DefPan, 1)) return false;
 		if (!ReadBytes(m, &s->Length, 4)) return false;
 		if (!ReadBytes(m, &s->LoopBeg, 4)) return false;
 		if (!ReadBytes(m, &s->LoopEnd, 4)) return false;
@@ -281,10 +281,10 @@ bool LoadIT(MEMFILE *m)
 		if (!ReadBytes(m, &s->SusLoopBeg, 4)) return false;
 		if (!ReadBytes(m, &s->SusLoopEnd, 4)) return false;
 		if (!ReadBytes(m, &s->OffsetInFile, 4)) return false;
-		if (!ReadBytes(m, &s->ViS, 1)) return false;
-		if (!ReadBytes(m, &s->ViD, 1)) return false;
-		if (!ReadBytes(m, &s->ViR, 1)) return false;
-		if (!ReadBytes(m, &s->ViT, 1)) return false;
+		if (!ReadBytes(m, &s->AutoVibratoSpeed, 1)) return false;
+		if (!ReadBytes(m, &s->AutoVibratoDepth, 1)) return false;
+		if (!ReadBytes(m, &s->AutoVibratoRate, 1)) return false;
+		if (!ReadBytes(m, &s->AutoVibratoWaveform, 1)) return false;
 
 		// just in case
 		s->DOSFilename[12] = '\0';
@@ -383,7 +383,7 @@ bool LoadIT(MEMFILE *m)
 	mseek(m, PtrListOffset + (Song.Header.InsNum * 4) + (Song.Header.SmpNum * 4), SEEK_SET);
 	size_t PatPtrOffset = mtell(m);
 
-	pattern_t *p = Song.Pat;
+	pattern_t *p = Song.Patt;
 	for (uint32_t i = 0; i < Song.Header.PatNum; i++, p++)
 	{
 		mseek(m, PatPtrOffset + (i * 4), SEEK_SET);

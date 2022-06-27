@@ -254,7 +254,7 @@ const MixFunc_t HQ_MixFunctionTables[16] =
 
 static void Mix8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	float *t, fSample;
@@ -278,7 +278,7 @@ static void Mix8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 
 static void Mix16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	float *t, fSample;
@@ -302,7 +302,7 @@ static void Mix16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 
 static void MixSurround8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	float *t, fSample;
@@ -328,7 +328,7 @@ static void MixSurround8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSample
 
 static void MixSurround16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	float *t, fSample;
@@ -354,7 +354,7 @@ static void MixSurround16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSampl
 
 static void Mix8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *baseR = (int8_t *)s->DataR;
 	int8_t *smp = base + sc->SamplingPosition;
@@ -381,7 +381,7 @@ static void Mix8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 
 static void Mix16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *baseR = (int16_t *)s->DataR;
 	int16_t *smp = base + sc->SamplingPosition;
@@ -408,7 +408,7 @@ static void Mix16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples
 
 static void MixSurround8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *baseR = (int8_t *)s->DataR;
 	int8_t *smp = base + sc->SamplingPosition;
@@ -437,7 +437,7 @@ static void MixSurround8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t Num
 
 static void MixSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *baseR = (int16_t *)s->DataR;
 	int16_t *smp = base + sc->SamplingPosition;
@@ -466,7 +466,7 @@ static void MixSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t Nu
 
 static void MixFiltered8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	float *t, fSample;
@@ -490,7 +490,7 @@ static void MixFiltered8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSample
 
 static void MixFiltered16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	float *t, fSample;
@@ -514,7 +514,7 @@ static void MixFiltered16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSampl
 
 static void MixFilteredSurround8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	float *t, fSample;
@@ -540,7 +540,7 @@ static void MixFilteredSurround8Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t N
 
 static void MixFilteredSurround16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	float *t, fSample;
@@ -566,7 +566,7 @@ static void MixFilteredSurround16Bit(slaveChn_t *sc, float *fMixBufPtr, int32_t 
 
 static void MixFiltered8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *baseR = (int8_t *)s->DataR;
 	int8_t *smp = base + sc->SamplingPosition;
@@ -593,7 +593,7 @@ static void MixFiltered8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t Num
 
 static void MixFiltered16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *baseR = (int16_t *)s->DataR;
 	int16_t *smp = base + sc->SamplingPosition;
@@ -620,7 +620,7 @@ static void MixFiltered16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t Nu
 
 static void MixFilteredSurround8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *baseR = (int8_t *)s->DataR;
 	int8_t *smp = base + sc->SamplingPosition;
@@ -649,7 +649,7 @@ static void MixFilteredSurround8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int
 
 static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *baseR = (int16_t *)s->DataR;
 	int16_t *smp = base + sc->SamplingPosition;

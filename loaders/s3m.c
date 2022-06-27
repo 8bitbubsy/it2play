@@ -164,8 +164,8 @@ bool LoadS3M(MEMFILE *m)
 		if (SmpFlags & 4)
 			s->Flags |= SMPF_16BIT;
 
-		s->GvL = 64;
-		s->DfP = 32;
+		s->GlobVol = 64;
+		s->DefPan = 32;
 
 		if (s->Flags & SMPF_ASSOCIATED_WITH_HEADER)
 		{
@@ -231,7 +231,7 @@ bool LoadS3M(MEMFILE *m)
 	}
 
 	// Load patterns....
-	pattern_t *p = Song.Pat;
+	pattern_t *p = Song.Patt;
 	for (int32_t i = 0; i < Song.Header.PatNum; i++, p++)
 	{
 		const uint32_t PatternOffset = PatPtrs[i] << 4;
@@ -605,6 +605,6 @@ static bool StorePattern(uint8_t NumRows, int32_t Pattern)
 	if (!Music_AllocatePattern(Pattern, PackedLength))
 		return false;
 
-	EncodePattern(&Song.Pat[Pattern], NumRows);
+	EncodePattern(&Song.Patt[Pattern], NumRows);
 	return true;
 }

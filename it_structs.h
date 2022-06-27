@@ -109,7 +109,7 @@ typedef struct envNode_t
 
 typedef struct env_t
 {
-	uint8_t Flags, Num, LpB, LpE, SLB, SLE;
+	uint8_t Flags, Num, LoopBeg, LoopEnd, SusLoopBeg, SusLoopEnd;
 	envNode_t NodePoints[25];
 } env_t;
 
@@ -118,26 +118,22 @@ typedef struct instrument_t
 	char DOSFilename[12+1];
 	uint8_t NNA, DCT, DCA;
 	uint16_t FadeOut;
-	uint8_t PPS, PPC, GbV, DfP, RV, RP;
-	uint16_t TrkVers;
-	uint8_t NoS;
+	uint8_t PitchPanSep, PitchPanCenter, GlobVol, DefPan, RandVol, RandPan;
 	char InstrumentName[26];
-	uint8_t IFC, IFR, MCh, MPr;
-	uint16_t MIDIBnk;
+	uint8_t FilterCutoff, FilterResonance, MIDIChn, MIDIProg;
+	uint16_t MIDIBank;
 	uint16_t SmpNoteTable[120];
-	env_t VEnvelope;
-	env_t PEnvelope;
-	env_t PtEnvelope;
+	env_t VolEnv, PanEnv, PitchEnv;
 } instrument_t;
 
 typedef struct smp_t
 {
 	char DOSFilename[12+1];
-	uint8_t GvL, Flags, Vol;
+	uint8_t GlobVol, Flags, Vol;
 	char SampleName[26];
-	uint8_t Cvt, DfP;
+	uint8_t Cvt, DefPan;
 	uint32_t Length, LoopBeg, LoopEnd, C5Speed, SusLoopBeg, SusLoopEnd, OffsetInFile;
-	uint8_t ViS, ViD, ViR, ViT;
+	uint8_t AutoVibratoSpeed, AutoVibratoDepth, AutoVibratoRate, AutoVibratoWaveform;
 	void *Data;
 
 	// 8bb: added this for custom HQ driver
@@ -147,17 +143,21 @@ typedef struct smp_t
 typedef struct hostChn_t
 {
 	uint16_t Flags;
-	uint8_t Msk, Nte, Ins, Vol, Cmd, CmdVal, OCm, OCmVal, VCm, VCmVal, MCh, MPr, Nt2, Smp;
-	uint8_t DKL, EFG, O00, I00, J00, M00, N00, P00, Q00, T00, S00, OxH, W00, VCE, GOE, SFx;
-	uint8_t HCN, CUC, VSe, LTr;
-	void *SCOffst;
-	uint8_t PLR, PLC, PWF, PPo, PDp, PSp, LPn;
-	int8_t LVi;
-	uint8_t CP, CV;
-	int8_t VCh;
-	uint8_t TCD, Too, RTC;
+	uint8_t NotePackMask, RawNote, Ins, Vol, Cmd, CmdVal, OldCmd, OldCmdVal, VolCmd, VolCmdVal;
+	uint8_t MIDIChn, MIDIProg, TranslatedNote, Smp;
+	uint8_t DKL, EFG, O00, I00, J00, M00, N00, P00, Q00, T00, S00, W00, GOE, SFx;
+	uint8_t HighSmpOffs;
+	uint8_t HostChnNum, VolSet;
+	void *SlaveChnPtr;
+	uint8_t PattLoopStartRow, PattLoopCount;
+	uint8_t PanbrelloWaveform, PanbrelloPos, PanbrelloDepth, PanbrelloSpeed, LastPanbrelloData;
+	int8_t LastVibratoData, LastTremoloData;
+	uint8_t ChnPan, ChnVol;
+	int8_t VolSlideDelta;
+	uint8_t TremorCount, TremorOnOff, RetrigCount;
 	int32_t PortaFreq;
-	uint8_t VWF, VPo, VDp, VSp, TWF, TPo, TDp, TSp;
+	uint8_t VibratoWaveform, VibratoPos, VibratoDepth, VibratoSpeed;
+	uint8_t TremoloWaveform, TremoloPos, TremoloDepth, TremoloSpeed;
 	uint8_t MiscEfxData[16];
 } hostChn_t;
 
@@ -170,25 +170,25 @@ typedef struct envState_t
 typedef struct slaveChn_t
 {
 	uint16_t Flags;
-	uint32_t MixOffset;
-	uint8_t LpM, LpD;
+	uint32_t MixOffset; // 8bb: which sample mix function to use
+	uint8_t LoopMode, LoopDirection;
 	int32_t LeftVolume, RightVolume;
 	int32_t Frequency, FrequencySet;
-	uint8_t Bit, ViP;
-	uint16_t ViDepth;
+	uint8_t SmpBitDepth, AutoVibratoPos;
+	uint16_t AutoVibratoDepth;
 	int32_t OldLeftVolume, OldRightVolume;
-	uint8_t FV, Vol, VS, CVl, SVl, FP;
+	uint8_t FinalVol, Vol, VolSet, ChnVol, SmpVol, FinalPan, FinalPlayPan;
 	uint16_t FadeOut;
-	uint8_t DCT, DCA, Pan, PS;
-	instrument_t *InsOffs;
-	uint8_t Nte, Ins;
-	sample_t *SmpOffs;
-	uint8_t Smp, FPP;
-	void *HCOffst;
-	uint8_t HCN, NNA, MCh, MPr;
-	uint16_t MBank;
+	uint8_t DCT, DCA, Pan, PanSet;
+	instrument_t *InsPtr;
+	sample_t *SmpPtr;
+	uint8_t Note, Ins;
+	uint8_t Smp;
+	void *HostChnPtr;
+	uint8_t HostChnNum, NNA, MIDIChn, MIDIProg;
+	uint16_t MIDIBank;
 	int32_t LoopBeg, LoopEnd;
-	uint32_t SmpError;
+	uint32_t Frac32;
 	uint16_t vol16Bit;
 	int32_t SamplingPosition;
 	envState_t VEnvState;
@@ -199,7 +199,7 @@ typedef struct slaveChn_t
 	int32_t filterc;
 
 	// 8bb: added these
-	uint32_t Delta;
+	uint32_t Delta32;
 	int32_t OldSamples[2];
 	int32_t DestVolL, DestVolR, CurrVolL, CurrVolR; // 8bb: ramp
 	float fOldSamples[4], fFiltera, fFilterb, fFilterc;
@@ -225,7 +225,7 @@ typedef struct // 8bb: custom struct
 	uint32_t NumChannels;
 	uint8_t Type, Flags, FilterParameters[128];
 	uint32_t MixMode, MixSpeed;
-	int32_t Delta;
+	int32_t Delta32;
 	int64_t Delta64;
 	float QualityFactorTable[128], FreqParameterMultiplier, FreqMultiplier;
 
@@ -243,7 +243,7 @@ typedef struct song_t
 	uint8_t Orders[MAX_ORDERS];
 	instrument_t Ins[MAX_INSTRUMENTS];
 	sample_t Smp[MAX_SAMPLES];
-	pattern_t Pat[MAX_PATTERNS];
+	pattern_t Patt[MAX_PATTERNS];
 	char Message[MAX_SONGMSG_LENGTH+1]; // 8bb: +1 to fit protection-NUL
 
 	volatile bool Playing, Loaded;

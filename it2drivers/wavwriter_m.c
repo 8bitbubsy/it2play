@@ -12,7 +12,7 @@ static void Mix32Surround8Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSam
 static void Mix32Surround16Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSamples);
 
 #define Get8BitWaveForm \
-	fSample = IT2_Cubic8(base, smp, sc->SmpError); \
+	fSample = IT2_Cubic8(base, smp, sc->Frac32); \
 	fSample *= sc->fFiltera; \
 	f1 = sc->fOldSamples[0]; \
 	f1 *= sc->fFilterb; \
@@ -27,7 +27,7 @@ static void Mix32Surround16Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSa
 	sample = ApplyCompressorAndQuantize(fSample);
 
 #define Get16BitWaveForm \
-	fSample = IT2_Cubic16(base, smp, sc->SmpError); \
+	fSample = IT2_Cubic16(base, smp, sc->Frac32); \
 	fSample *= sc->fFiltera; \
 	f1 = sc->fOldSamples[0]; \
 	f1 *= sc->fFilterb; \
@@ -61,9 +61,9 @@ static void Mix32Surround16Bit(slaveChn_t *sc, int32_t *mixBufPtr, int32_t numSa
 	sc->CurrVolR += (sc->DestVolR - sc->CurrVolR) >> RAMPSPEED;
 
 #define UpdatePos \
-	sc->SmpError += Driver.Delta; \
-	smp += (int32_t)sc->SmpError >> MIX_FRAC_BITS; \
-	sc->SmpError &= MIX_FRAC_MASK;
+	sc->Frac32 += Driver.Delta32; \
+	smp += (int32_t)sc->Frac32 >> MIX_FRAC_BITS; \
+	sc->Frac32 &= MIX_FRAC_MASK;
 
 #define Mix32Stereo8Bit_M \
 	Get8BitWaveForm \
@@ -231,7 +231,7 @@ static inline float IT2_Cubic16(int16_t *base, int16_t *smp, int32_t frac)
 
 static void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
@@ -254,7 +254,7 @@ static void Mix32Stereo8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSampl
 
 static void Mix32Stereo16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
@@ -277,7 +277,7 @@ static void Mix32Stereo16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamp
 
 static void Mix32Surround8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int8_t *base = (int8_t *)s->Data;
 	int8_t *smp = base + sc->SamplingPosition;
 	int32_t sample;
@@ -302,7 +302,7 @@ static void Mix32Surround8Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSam
 
 static void Mix32Surround16Bit(slaveChn_t *sc, int32_t *MixBufPtr, int32_t NumSamples)
 {
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 	int16_t *base = (int16_t *)s->Data;
 	int16_t *smp = base + sc->SamplingPosition;
 	int32_t sample;

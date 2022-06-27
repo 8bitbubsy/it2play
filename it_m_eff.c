@@ -13,8 +13,8 @@ static const uint8_t SlideTable[9] = { 1, 4, 8, 16, 32, 64, 96, 128, 255 };
 static void InitCommandG11(hostChn_t *hc); // Jumped to from Lxx
 static void InitCommandM2(hostChn_t *hc, uint8_t vol);
 static void InitCommandX2(hostChn_t *hc, uint8_t pan); // 8bb: pan = 0..63
-static void CommandH5(hostChn_t *hc, slaveChn_t *sc, int8_t VibData);
-static void CommandR2(hostChn_t *hc, slaveChn_t *sc, int8_t VolData);
+static void CommandH5(hostChn_t *hc, slaveChn_t *sc, int8_t VibratoData);
+static void CommandR2(hostChn_t *hc, slaveChn_t *sc, int8_t TremoloData);
 
 void NoCommand(hostChn_t *hc)
 {
@@ -24,21 +24,21 @@ void NoCommand(hostChn_t *hc)
 
 static void CommandEChain(hostChn_t *hc, uint16_t SlideValue)
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	PitchSlideDown(hc, sc, SlideValue);
 	sc->FrequencySet = sc->Frequency;
 }
 
 static void CommandFChain(hostChn_t *hc, uint16_t SlideValue)
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	PitchSlideUp(hc, sc, SlideValue);
 	sc->FrequencySet = sc->Frequency;
 }
 
 static void CommandD2(hostChn_t *hc, slaveChn_t *sc, uint8_t vol)
 {
-	sc->Vol = sc->VS = hc->VSe = vol;
+	sc->Vol = sc->VolSet = hc->VolSet = vol;
 	sc->Flags |= SF_RECALC_VOL;
 }
 
@@ -46,10 +46,10 @@ static void InitVibrato(hostChn_t *hc)
 {
 	if (Song.Header.Flags & ITF_OLD_EFFECTS)
 	{
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
 		sc->Flags |= SF_FREQ_CHANGE;
-		CommandH5(hc, sc, hc->LVi);
+		CommandH5(hc, sc, hc->LastVibratoData);
 	}
 	else
 	{
@@ -67,49 +67,49 @@ static void InitCommandD7(hostChn_t *hc, slaveChn_t *sc) // Jmp point for Lxx
 	if (lo == 0)
 	{
 		// Slide up.
-		hc->VCh = hi >> 4;
+		hc->VolSlideDelta = hi >> 4;
 		hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON;
 
-		if (hc->VCh == 0x0F)
+		if (hc->VolSlideDelta == 0x0F)
 			CommandD(hc);
 	}
 	else if (hi == 0)
 	{
 		// Slide down
 
-		hc->VCh = -lo;
+		hc->VolSlideDelta = -lo;
 		hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON;
 
-		if (hc->VCh == -15)
+		if (hc->VolSlideDelta == -15)
 			CommandD(hc);
 	}
 	else if (lo == 0x0F)
 	{
 		// Slide up (fine)
-		hc->VCh = 0;
+		hc->VolSlideDelta = 0;
 
-		uint8_t vol = sc->VS + (hi >> 4);
+		uint8_t vol = sc->VolSet + (hi >> 4);
 		if (vol > 64)
 			vol = 64;
 
-		sc->Vol = sc->VS = hc->VSe = vol;
+		sc->Vol = sc->VolSet = hc->VolSet = vol;
 	}
 	else if (hi == 0xF0)
 	{
 		// Slide down (fine)
-		hc->VCh = 0;
+		hc->VolSlideDelta = 0;
 
-		uint8_t vol = sc->VS - lo;
+		uint8_t vol = sc->VolSet - lo;
 		if ((int8_t)vol < 0)
 			vol = 0;
 
-		sc->Vol = sc->VS = hc->VSe = vol;
+		sc->Vol = sc->VolSet = hc->VolSet = vol;
 	}
 }
 
 static void InitVolumeEffect(hostChn_t *hc)
 {
-	if (!(hc->Msk & 0x44))
+	if (!(hc->NotePackMask & 0x44))
 		return;
 
 	int8_t volCmd = (hc->Vol & 0x7F) - 65;
@@ -122,7 +122,7 @@ static void InitVolumeEffect(hostChn_t *hc)
 	uint8_t cmd = (uint8_t)volCmd / 10;
 	uint8_t val = (uint8_t)volCmd % 10;
 
-	hc->VCm = cmd; // Store effect number
+	hc->VolCmd = cmd; // Store effect number
 
 	/* Memory for effects A->D, (EFG)/H don't share.
 	**
@@ -140,7 +140,7 @@ static void InitVolumeEffect(hostChn_t *hc)
 	{
 		if (cmd < 4)
 		{
-			hc->VCmVal = val;
+			hc->VolCmdVal = val;
 		}
 		else if (cmd < 6)
 		{
@@ -157,7 +157,7 @@ static void InitVolumeEffect(hostChn_t *hc)
 
 	if (hc->Flags & HF_CHAN_ON)
 	{
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
 		if (cmd > 1)
 		{
@@ -166,7 +166,7 @@ static void InitVolumeEffect(hostChn_t *hc)
 			if (cmd > 6)
 			{
 				if (val != 0)
-					hc->VDp = val << 2;
+					hc->VibratoDepth = val << 2;
 
 				if (hc->Flags & HF_CHAN_ON)
 					InitVibrato(hc);
@@ -180,7 +180,7 @@ static void InitVolumeEffect(hostChn_t *hc)
 		{
 			// Fine volume slide down
 
-			int8_t vol = sc->VS - hc->VCmVal;
+			int8_t vol = sc->VolSet - hc->VolCmdVal;
 			if (vol < 0)
 				vol = 0;
 
@@ -190,7 +190,7 @@ static void InitVolumeEffect(hostChn_t *hc)
 		{
 			// Fine volume slide up
 
-			int8_t vol = sc->VS + hc->VCmVal;
+			int8_t vol = sc->VolSet + hc->VolCmdVal;
 			if (vol > 64)
 				vol = 64;
 
@@ -204,7 +204,7 @@ static void InitVolumeEffect(hostChn_t *hc)
 		if (cmd == 7) // Vibrato?
 		{
 			if (val != 0)
-				hc->VDp = val << 2;
+				hc->VibratoDepth = val << 2;
 
 			if (hc->Flags & HF_CHAN_ON)
 				InitVibrato(hc);
@@ -214,9 +214,9 @@ static void InitVolumeEffect(hostChn_t *hc)
 
 void VolumeCommandC(hostChn_t *hc)
 {
-	slaveChn_t *sc = hc->SCOffst;
+	slaveChn_t *sc = hc->SlaveChnPtr;
 
-	int8_t vol = sc->VS + hc->VCmVal;
+	int8_t vol = sc->VolSet + hc->VolCmdVal;
 	if (vol > 64)
 	{
 		hc->Flags &= ~HF_UPDATE_VOLEFX_IF_CHAN_ON; // Turn off effect calling
@@ -228,9 +228,9 @@ void VolumeCommandC(hostChn_t *hc)
 
 void VolumeCommandD(hostChn_t *hc)
 {
-	slaveChn_t *sc = hc->SCOffst;
+	slaveChn_t *sc = hc->SlaveChnPtr;
 
-	int8_t vol = sc->VS - hc->VCmVal;
+	int8_t vol = sc->VolSet - hc->VolCmdVal;
 	if (vol < 0)
 	{
 		hc->Flags &= ~HF_UPDATE_VOLEFX_IF_CHAN_ON; // Turn off effect calling
@@ -262,7 +262,7 @@ void VolumeCommandG(hostChn_t *hc)
 	if (SlideValue == 0)
 		return;
 
-	slaveChn_t *sc = hc->SCOffst;
+	slaveChn_t *sc = hc->SlaveChnPtr;
 
 	if (hc->MiscEfxData[2] == 1) // 8bb: slide up?
 	{
@@ -309,16 +309,16 @@ static void InitNoCommand3(hostChn_t *hc, uint8_t hcFlags)
 static void NoOldEffect(hostChn_t *hc, uint8_t hcFlags)
 {
 	uint8_t vol = hc->Vol;
-	if (!((hc->Msk & 0x44) && vol <= 64)) // 8bb: improve this yucky logic...
+	if (!((hc->NotePackMask & 0x44) && vol <= 64)) // 8bb: improve this yucky logic...
 	{
-		if ((hc->Msk & 0x44) && (vol & 0x7F) < 65)
+		if ((hc->NotePackMask & 0x44) && (vol & 0x7F) < 65)
 		{
 			// Panning set!
 			hc->Flags = (hc->Flags & 0xFF00) | hcFlags;
 			InitCommandX2(hc, vol - 128);
 		}
 
-		if (!(hc->Msk & 0x22) || hc->Smp == 0) // Instrument present?
+		if (!(hc->NotePackMask & 0x22) || hc->Smp == 0) // Instrument present?
 		{
 			InitNoCommand3(hc, hcFlags);
 			return;
@@ -327,12 +327,12 @@ static void NoOldEffect(hostChn_t *hc, uint8_t hcFlags)
 		vol = Song.Smp[hc->Smp-1].Vol; // Default volume
 	}
 
-	hc->VSe = vol;
+	hc->VolSet = vol;
 
 	if (hcFlags & HF_CHAN_ON)
 	{
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
-		sc->Vol = sc->VS = vol;
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
+		sc->Vol = sc->VolSet = vol;
 		sc->Flags |= SF_RECALC_VOL;
 	}
 
@@ -343,7 +343,7 @@ static void InitNoCommand11(hostChn_t *hc, slaveChn_t *sc, uint8_t hcFlags)
 {
 	GetLoopInformation(sc);
 
-	if (!(hc->Msk & (0x22+0x44)))
+	if (!(hc->NotePackMask & (0x22+0x44)))
 	{
 		InitNoCommand3(hc, hcFlags);
 		return;
@@ -351,7 +351,7 @@ static void InitNoCommand11(hostChn_t *hc, slaveChn_t *sc, uint8_t hcFlags)
 
 	if ((Song.Header.Flags & (ITF_INSTR_MODE | ITF_OLD_EFFECTS)) == ITF_INSTR_MODE+ITF_OLD_EFFECTS)
 	{
-		if ((hc->Msk & 0x22) && hc->Ins != 255)
+		if ((hc->NotePackMask & 0x22) && hc->Ins != 255)
 		{
 			sc->FadeOut = 1024;
 			InitPlayInstrument(hc, sc, &Song.Ins[hc->Ins-1]);
@@ -365,26 +365,26 @@ void InitNoCommand(hostChn_t *hc)
 {
 	uint8_t hcFlags = hc->Flags & 0xFF;
 
-	if (!(hc->Msk & 0x33))
+	if (!(hc->NotePackMask & 0x33))
 	{
 		NoOldEffect(hc, hcFlags);
 		return;
 	}
 
 	// Note here! Check for noteoff.
-	if (hc->Nt2 >= 120)
+	if (hc->TranslatedNote >= 120)
 	{
 		if (hcFlags & HF_CHAN_ON)
 		{
-			slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+			slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
-			if (hc->Nt2 == 255) // 8bb: note off
+			if (hc->TranslatedNote == 255) // 8bb: note off
 			{
 				sc->Flags |= SF_NOTE_OFF;
 				InitNoCommand11(hc, sc, hcFlags);
 				return;
 			}
-			else if (hc->Nt2 == 254) // 8bb: note cut
+			else if (hc->TranslatedNote == 254) // 8bb: note cut
 			{
 				hcFlags &= ~HF_CHAN_ON;
 
@@ -405,15 +405,15 @@ void InitNoCommand(hostChn_t *hc)
 
 	if (hcFlags & HF_CHAN_ON)
 	{
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
-		if (!(hc->Msk & 0x11) && sc->Nte == hc->Nte && sc->Ins == hc->Ins)
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
+		if (!(hc->NotePackMask & 0x11) && sc->Note == hc->RawNote && sc->Ins == hc->Ins)
 		{
 			NoOldEffect(hc, hcFlags);
 			return;
 		}
 	}
 
-	if ((hc->Msk & 0x44) && hc->Vol >= 193 && hc->Vol <= 202 && (hc->Flags & HF_CHAN_ON))
+	if ((hc->NotePackMask & 0x44) && hc->Vol >= 193 && hc->Vol <= 202 && (hc->Flags & HF_CHAN_ON))
 	{
 		InitVolumeEffect(hc);
 		return;
@@ -428,20 +428,20 @@ void InitNoCommand(hostChn_t *hc)
 
 	// Channel allocated.
 
-	sample_t *s = sc->SmpOffs;
+	sample_t *s = sc->SmpPtr;
 
-	sc->Vol = sc->VS = hc->VSe;
+	sc->Vol = sc->VolSet = hc->VolSet;
 
 	if (!(Song.Header.Flags & ITF_INSTR_MODE))
 	{
-		if (s->DfP & 0x80)
-			hc->CP = sc->Pan = s->DfP & 127;
+		if (s->DefPan & 0x80)
+			hc->ChnPan = sc->Pan = s->DefPan & 127;
 	}
 
 	sc->SamplingPosition = 0;
-	sc->SmpError = 0; // 8bb: clear fractional sampling position
+	sc->Frac32 = 0; // 8bb: clear fractional sampling position
 	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
-	sc->Frequency = sc->FrequencySet = ((int64_t)s->C5Speed * PitchTable[hc->Nt2]) >> 16;
+	sc->Frequency = sc->FrequencySet = ((uint64_t)s->C5Speed * (uint32_t)PitchTable[hc->TranslatedNote]) >> 16;
 
 	hcFlags |= HF_CHAN_ON;
 	hcFlags &= ~HF_PITCH_SLIDE_ONGOING;
@@ -497,7 +497,7 @@ void InitCommandD(hostChn_t *hc)
 	if (!(hc->Flags & HF_CHAN_ON))
 		return;
 
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	InitCommandD7(hc, sc);
 }
 
@@ -528,7 +528,7 @@ void InitCommandE(hostChn_t *hc)
 	if ((hc->EFG & 0xF0) != 0xE0)
 		SlideVal <<= 2;
 
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	PitchSlideDown(hc, sc, SlideVal);
 	sc->FrequencySet = sc->Frequency;
 }
@@ -560,7 +560,7 @@ void InitCommandF(hostChn_t *hc)
 	if ((hc->EFG & 0xF0) != 0xE0)
 		SlideVal <<= 2;
 
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	PitchSlideUp(hc, sc, SlideVal);
 	sc->FrequencySet = sc->Frequency;
 }
@@ -574,15 +574,14 @@ static bool Gxx_ChangeSample(hostChn_t *hc, slaveChn_t *sc, uint8_t sample)
 
 	// Now to update sample info.
 
-	sample_t *s = &Song.Smp[sample];
+	sample_t *s = sc->SmpPtr = &Song.Smp[sample];
 	sc->Smp = sample;
-	sc->SmpOffs = s;
-	sc->ViDepth = 0;
-	sc->LpD = 0; // Reset loop direction.
-	sc->SmpError = 0; // 8bb: reset sampling position fraction
+	sc->AutoVibratoDepth = 0;
+	sc->LoopDirection = 0;
+	sc->Frac32 = 0; // 8bb: reset sampling position fraction
 	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
 	sc->SamplingPosition = 0;
-	sc->SVl = s->GvL * 2;
+	sc->SmpVol = s->GlobVol * 2;
 
 	if (!(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
 	{
@@ -592,7 +591,7 @@ static bool Gxx_ChangeSample(hostChn_t *hc, slaveChn_t *sc, uint8_t sample)
 		return false;
 	}
 
-	sc->Bit = s->Flags & SMPF_16BIT;
+	sc->SmpBitDepth = s->Flags & SMPF_16BIT;
 	GetLoopInformation(sc);
 
 	return true;
@@ -600,9 +599,9 @@ static bool Gxx_ChangeSample(hostChn_t *hc, slaveChn_t *sc, uint8_t sample)
 
 static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
-	if ((hc->Msk & 0x22) && hc->Smp > 0)
+	if ((hc->NotePackMask & 0x22) && hc->Smp > 0)
 	{
 		// Checking for change of sample or instrument.
 
@@ -611,7 +610,7 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx
 		if (Song.Header.Flags & ITF_COMPAT_GXX)
 		{
 			hc->Smp = sc->Smp+1;
-			sc->SVl = Song.Smp[sc->Smp].GvL * 2;
+			sc->SmpVol = Song.Smp[sc->Smp].GlobVol * 2;
 
 			ChangeInstrument = true;
 		}
@@ -620,7 +619,7 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx
 			const uint8_t hcSmp = hc->Smp-1;
 			const uint8_t oldSlaveIns = sc->Ins;
 
-			sc->Nte = hc->Nte;
+			sc->Note = hc->RawNote;
 			sc->Ins = hc->Ins;
 
 			if (sc->Ins != oldSlaveIns) // Ins the same?
@@ -656,33 +655,33 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx
 			if (oldSCFlags & SF_CHAN_ON)
 				sc->Flags &= ~SF_NEW_NOTE;
 
-			sc->SVl = (ins->GbV * sc->SVl) >> 7;
+			sc->SmpVol = (ins->GlobVol * sc->SmpVol) >> 7;
 		}
 	}
 
-	if ((Song.Header.Flags & ITF_INSTR_MODE) || (hc->Msk & 0x11))
+	if ((Song.Header.Flags & ITF_INSTR_MODE) || (hc->NotePackMask & 0x11))
 	{
 		// OK. Time to calc freq.
 
-		if (hc->Nt2 <= 119)
+		if (hc->TranslatedNote <= 119)
 		{
 			// Don't overwrite note if MIDI!
 			if (hc->Smp != 101)
-				sc->Nte = hc->Nt2;
+				sc->Note = hc->TranslatedNote;
 
-			sample_t *s = (sample_t *)sc->SmpOffs;
+			sample_t *s = sc->SmpPtr;
 
-			hc->PortaFreq = ((int64_t)s->C5Speed * PitchTable[hc->Nt2]) >> 16;
+			hc->PortaFreq = ((uint64_t)s->C5Speed * (uint32_t)PitchTable[hc->TranslatedNote]) >> 16;
 			hc->Flags |= HF_PITCH_SLIDE_ONGOING;
 		}
 		else if (hc->Flags & HF_CHAN_ON)
 		{
-			if (hc->Nt2 == 255)
+			if (hc->TranslatedNote == 255)
 			{
 				sc->Flags |= SF_NOTE_OFF;
 				GetLoopInformation(sc);
 			}
-			else if (hc->Nt2 == 254)
+			else if (hc->TranslatedNote == 254)
 			{
 				hc->Flags &= ~HF_CHAN_ON;
 				sc->Flags = SF_NOTE_STOP;
@@ -697,7 +696,7 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx
 	bool volFromVolColumn = false;
 	uint8_t vol = 0; // 8bb: set to 0, just to make the compiler happy..
 
-	if (hc->Msk & 0x44)
+	if (hc->NotePackMask & 0x44)
 	{
 		if (hc->Vol <= 64)
 		{
@@ -711,13 +710,13 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx
 		}
 	}
 
-	if (volFromVolColumn || (hc->Msk & 0x22))
+	if (volFromVolColumn || (hc->NotePackMask & 0x22))
 	{
 		if (!volFromVolColumn)
-			vol = ((sample_t *)sc->SmpOffs)->Vol;
+			vol = sc->SmpPtr->Vol;
 
 		sc->Flags |= SF_RECALC_VOL;
-		sc->Vol = sc->VS = hc->VSe = vol;
+		sc->Vol = sc->VolSet = hc->VolSet = vol;
 	}
 
 	if (hc->Flags & HF_PITCH_SLIDE_ONGOING) // Slide on???
@@ -773,21 +772,21 @@ void InitCommandG(hostChn_t *hc)
 
 void InitCommandH(hostChn_t *hc)
 {
-	if ((hc->Msk & 0x11) && hc->Nte <= 119)
-		hc->VPo = hc->LVi = 0;
+	if ((hc->NotePackMask & 0x11) && hc->RawNote <= 119)
+		hc->VibratoPos = hc->LastVibratoData = 0;
 
 	uint8_t speed = (hc->CmdVal >> 4) << 2;
 	uint8_t depth = (hc->CmdVal & 0x0F) << 2;
 
 	if (speed > 0)
-		hc->VSp = speed;
+		hc->VibratoSpeed = speed;
 
 	if (depth > 0)
 	{
 		if (Song.Header.Flags & ITF_OLD_EFFECTS)
 			depth <<= 1;
 
-		hc->VDp = depth;
+		hc->VibratoDepth = depth;
 	}
 
 	InitNoCommand(hc);
@@ -862,7 +861,7 @@ void InitCommandK(hostChn_t *hc)
 	if (hc->Flags & HF_CHAN_ON)
 	{
 		InitVibrato(hc);
-		InitCommandD7(hc, (slaveChn_t *)hc->SCOffst);
+		InitCommandD7(hc, (slaveChn_t *)hc->SlaveChnPtr);
 
 		hc->Flags |= HF_ALWAYS_UPDATE_EFX; // Always update.
 	}
@@ -877,7 +876,7 @@ void InitCommandL(hostChn_t *hc)
 	if (hc->Flags & HF_CHAN_ON)
 	{
 		InitCommandG11(hc);
-		InitCommandD7(hc, (slaveChn_t *)hc->SCOffst);
+		InitCommandD7(hc, (slaveChn_t *)hc->SlaveChnPtr);
 	}
 }
 
@@ -885,12 +884,12 @@ static void InitCommandM2(hostChn_t *hc, uint8_t vol)
 {
 	if (hc->Flags & HF_CHAN_ON)
 	{
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
-		sc->CVl = vol;
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
+		sc->ChnVol = vol;
 		sc->Flags |= SF_RECALC_VOL;
 	}
 
-	hc->CV = vol;
+	hc->ChnVol = vol;
 }
 
 void InitCommandM(hostChn_t *hc)
@@ -924,7 +923,7 @@ void InitCommandN(hostChn_t *hc)
 	}
 	else if (lo == 0x0F)
 	{
-		uint8_t vol = hc->CV + (hi >> 4);
+		uint8_t vol = hc->ChnVol + (hi >> 4);
 		if (vol > 64)
 			vol = 64;
 
@@ -932,7 +931,7 @@ void InitCommandN(hostChn_t *hc)
 	}
 	else if (hi == 0xF0)
 	{
-		uint8_t vol = hc->CV - lo;
+		uint8_t vol = hc->ChnVol - lo;
 		if ((int8_t)vol < 0)
 			vol = 0;
 
@@ -950,11 +949,11 @@ void InitCommandO(hostChn_t *hc)
 
 	InitNoCommand(hc);
 
-	if ((hc->Msk & 0x33) && hc->Nt2 < 120 && (hc->Flags & HF_CHAN_ON))
+	if ((hc->NotePackMask & 0x33) && hc->TranslatedNote < 120 && (hc->Flags & HF_CHAN_ON))
 	{
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
-		int32_t offset = ((hc->OxH << 8) | hc->O00) << 8;
+		int32_t offset = ((hc->HighSmpOffs << 8) | hc->O00) << 8;
 		if (offset >= sc->LoopEnd)
 		{
 			if (!(Song.Header.Flags & ITF_OLD_EFFECTS))
@@ -964,7 +963,7 @@ void InitCommandO(hostChn_t *hc)
 		}
 
 		sc->SamplingPosition = offset;
-		sc->SmpError = 0; // 8bb: clear fractional sampling position
+		sc->Frac32 = 0; // 8bb: clear fractional sampling position
 		sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
 	}
 }
@@ -977,9 +976,9 @@ void InitCommandP(hostChn_t *hc)
 
 	InitNoCommand(hc);
 
-	uint8_t pan = hc->CP;
+	uint8_t pan = hc->ChnPan;
 	if (hc->Flags & HF_CHAN_ON)
-		pan = ((slaveChn_t *)hc->SCOffst)->PS;
+		pan = ((slaveChn_t *)hc->SlaveChnPtr)->PanSet;
 
 	if (pan == PAN_SURROUND) // Surround??
 		return;
@@ -1027,8 +1026,8 @@ void InitCommandQ(hostChn_t *hc)
 
 	hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON;
 
-	if (hc->Msk & 0x11)
-		hc->RTC = hc->Q00 & 0x0F;
+	if (hc->NotePackMask & 0x11)
+		hc->RetrigCount = hc->Q00 & 0x0F;
 	else
 		CommandQ(hc);
 }
@@ -1037,10 +1036,10 @@ static void InitTremelo(hostChn_t *hc)
 {
 	if (Song.Header.Flags & ITF_OLD_EFFECTS)
 	{
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
 		sc->Flags |= SF_RECALC_FINALVOL; // Volume change...
-		CommandR2(hc, sc, hc->LTr);
+		CommandR2(hc, sc, hc->LastTremoloData);
 	}
 	else
 	{
@@ -1054,10 +1053,10 @@ void InitCommandR(hostChn_t *hc)
 	uint8_t depth = hc->CmdVal & 0x0F;
 
 	if (speed > 0)
-		hc->TSp = speed << 2;
+		hc->TremoloSpeed = speed << 2;
 
 	if (depth > 0)
-		hc->TDp = depth << 1;
+		hc->TremoloDepth = depth << 1;
 
 	InitNoCommand(hc);
 
@@ -1094,7 +1093,7 @@ void InitCommandS(hostChn_t *hc)
 		case 0x30: // set vibrato waveform
 		{
 			if (val <= 3)
-				hc->VWF = val;
+				hc->VibratoWaveform = val;
 
 			InitNoCommand(hc);
 		}
@@ -1103,7 +1102,7 @@ void InitCommandS(hostChn_t *hc)
 		case 0x40: // set tremelo waveform
 		{
 			if (val <= 3)
-				hc->TWF = val;
+				hc->TremoloWaveform = val;
 
 			InitNoCommand(hc);
 		}
@@ -1113,8 +1112,8 @@ void InitCommandS(hostChn_t *hc)
 		{
 			if (val <= 3)
 			{
-				hc->PWF = val;
-				hc->PPo = 0;
+				hc->PanbrelloWaveform = val;
+				hc->PanbrelloPos = 0;
 			}
 
 			InitNoCommand(hc);
@@ -1144,12 +1143,12 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 
-					const uint8_t targetHCN = hc->HCN | CHN_DISOWNED;
+					const uint8_t targetHostChnNum = hc->HostChnNum | CHN_DISOWNED;
 
 					slaveChn_t *sc = sChn;
 					for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
 					{
-						if (sc->HCN == targetHCN)
+						if (sc->HostChnNum == targetHostChnNum)
 						{
 							if (Driver.Flags & DF_USES_VOLRAMP)
 								sc->Flags |= SF_NOTE_STOP;
@@ -1164,12 +1163,12 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 
-					const uint8_t targetHCN = hc->HCN | CHN_DISOWNED;
+					const uint8_t targetHostChnNum = hc->HostChnNum | CHN_DISOWNED;
 
 					slaveChn_t *sc = sChn;
 					for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
 					{
-						if (sc->HCN == targetHCN)
+						if (sc->HostChnNum == targetHostChnNum)
 							sc->Flags |= SF_NOTE_OFF;
 					}
 				}
@@ -1179,12 +1178,12 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 
-					const uint8_t targetHCN = hc->HCN | CHN_DISOWNED;
+					const uint8_t targetHostChnNum = hc->HostChnNum | CHN_DISOWNED;
 
 					slaveChn_t *sc = sChn;
 					for (int32_t i = 0; i < MAX_SLAVE_CHANNELS; i++, sc++)
 					{
-						if (sc->HCN == targetHCN)
+						if (sc->HostChnNum == targetHostChnNum)
 							sc->Flags |= SF_FADEOUT;
 					}
 				}
@@ -1194,7 +1193,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->NNA = 0;
+						((slaveChn_t *)hc->SlaveChnPtr)->NNA = 0;
 				}
 				break;
 
@@ -1202,7 +1201,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->NNA = 1;
+						((slaveChn_t *)hc->SlaveChnPtr)->NNA = 1;
 				}
 				break;
 
@@ -1210,7 +1209,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->NNA = 2;
+						((slaveChn_t *)hc->SlaveChnPtr)->NNA = 2;
 				}
 				break;
 
@@ -1218,7 +1217,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->NNA = 3;
+						((slaveChn_t *)hc->SlaveChnPtr)->NNA = 3;
 				}
 				break;
 
@@ -1226,7 +1225,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->Flags &= ~SF_VOLENV_ON;
+						((slaveChn_t *)hc->SlaveChnPtr)->Flags &= ~SF_VOLENV_ON;
 				}
 				break;
 
@@ -1234,7 +1233,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->Flags |= SF_VOLENV_ON;
+						((slaveChn_t *)hc->SlaveChnPtr)->Flags |= SF_VOLENV_ON;
 				}
 				break;
 
@@ -1242,7 +1241,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->Flags &= ~SF_PANENV_ON;
+						((slaveChn_t *)hc->SlaveChnPtr)->Flags &= ~SF_PANENV_ON;
 				}
 				break;
 
@@ -1250,7 +1249,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->Flags |= SF_PANENV_ON;
+						((slaveChn_t *)hc->SlaveChnPtr)->Flags |= SF_PANENV_ON;
 				}
 				break;
 
@@ -1258,7 +1257,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->Flags &= ~SF_PITCHENV_ON;
+						((slaveChn_t *)hc->SlaveChnPtr)->Flags &= ~SF_PITCHENV_ON;
 				}
 				break;
 
@@ -1266,7 +1265,7 @@ void InitCommandS(hostChn_t *hc)
 				{
 					InitNoCommand(hc);
 					if (hc->Flags & HF_CHAN_ON)
-						((slaveChn_t *)hc->SCOffst)->Flags |= SF_PITCHENV_ON;
+						((slaveChn_t *)hc->SlaveChnPtr)->Flags |= SF_PITCHENV_ON;
 				}
 				break;
 			}
@@ -1291,7 +1290,7 @@ void InitCommandS(hostChn_t *hc)
 
 		case 0xA0: // Set high order offset
 		{
-			hc->OxH = val;
+			hc->HighSmpOffs = val;
 			InitNoCommand(hc);
 		}
 		break;
@@ -1302,22 +1301,22 @@ void InitCommandS(hostChn_t *hc)
 
 			if (val == 0)
 			{
-				hc->PLR = (uint8_t)Song.CurrentRow;
+				hc->PattLoopStartRow = (uint8_t)Song.CurrentRow;
 			}
-			else if (hc->PLC == 0)
+			else if (hc->PattLoopCount == 0)
 			{
-				hc->PLC = val;
-				Song.ProcessRow = hc->PLR - 1;
+				hc->PattLoopCount = val;
+				Song.ProcessRow = hc->PattLoopStartRow - 1;
 				Song.PatternLooping = true;
 			}
-			else if (--hc->PLC != 0)
+			else if (--hc->PattLoopCount != 0)
 			{
-				Song.ProcessRow = hc->PLR - 1;
+				Song.ProcessRow = hc->PattLoopStartRow - 1;
 				Song.PatternLooping = true;
 			}
 			else
 			{
-				hc->PLR = (uint8_t)Song.CurrentRow + 1;
+				hc->PattLoopStartRow = (uint8_t)Song.CurrentRow + 1;
 			}
 		}
 		break;
@@ -1379,21 +1378,21 @@ void InitCommandT(hostChn_t *hc)
 
 void InitCommandU(hostChn_t *hc)
 {
-	if (hc->Msk & 0x11)
-		hc->VPo = hc->LVi = 0;
+	if (hc->NotePackMask & 0x11)
+		hc->VibratoPos = hc->LastVibratoData = 0;
 
 	uint8_t speed = (hc->CmdVal >> 4) << 2;
 	uint8_t depth = hc->CmdVal & 0x0F;
 
 	if (speed > 0)
-		hc->VSp = speed;
+		hc->VibratoSpeed = speed;
 
 	if (depth > 0)
 	{
 		if (Song.Header.Flags & ITF_OLD_EFFECTS)
 			depth <<= 1;
 
-		hc->VDp = depth;
+		hc->VibratoDepth = depth;
 	}
 
 	InitNoCommand(hc);
@@ -1463,12 +1462,12 @@ static void InitCommandX2(hostChn_t *hc, uint8_t pan) // 8bb: pan = 0..63
 {
 	if (hc->Flags & HF_CHAN_ON)
 	{
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
-		sc->Pan = sc->PS = pan;
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
+		sc->Pan = sc->PanSet = pan;
 		sc->Flags |= (SF_RECALC_PAN | SF_RECALC_FINALVOL);
 	}
 
-	hc->CP = pan;
+	hc->ChnPan = pan;
 }
 
 void InitCommandX(hostChn_t *hc)
@@ -1485,10 +1484,10 @@ void InitCommandY(hostChn_t *hc)
 	uint8_t depth = hc->CmdVal & 0x0F;
 
 	if (speed > 0)
-		hc->PSp = speed;
+		hc->PanbrelloSpeed = speed;
 
 	if (depth > 0)
-		hc->PDp = depth << 1;
+		hc->PanbrelloDepth = depth << 1;
 
 	InitNoCommand(hc);
 
@@ -1503,7 +1502,7 @@ void InitCommandZ(hostChn_t *hc) // Macros start at 120h, 320h
 {
 	InitNoCommand(hc);
 
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
 	if (hc->CmdVal >= 0x80) // Macros!
 		MIDITranslate(hc, sc, 0x320 + ((hc->CmdVal & 0x7F) << 5));
@@ -1513,9 +1512,9 @@ void InitCommandZ(hostChn_t *hc) // Macros start at 120h, 320h
 
 void CommandD(hostChn_t *hc)
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
-	uint8_t vol = sc->VS + hc->VCh;
+	uint8_t vol = sc->VolSet + hc->VolSlideDelta;
 	if ((int8_t)vol < 0)
 	{
 		hc->Flags &= ~HF_UPDATE_EFX_IF_CHAN_ON;
@@ -1546,7 +1545,7 @@ void CommandG(hostChn_t *hc)
 		return;
 
 	uint16_t SlideValue = *(uint16_t *)&hc->MiscEfxData[0];
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
 	if (hc->MiscEfxData[2] == 1) // 8bb: slide direction
 	{
@@ -1591,54 +1590,54 @@ void CommandG(hostChn_t *hc)
 	}
 }
 
-static void CommandH5(hostChn_t *hc, slaveChn_t *sc, int8_t VibData)
+static void CommandH5(hostChn_t *hc, slaveChn_t *sc, int8_t VibratoData)
 {
-	VibData = (((VibData * (int8_t)hc->VDp) << 2) + 128) >> 8;
+	VibratoData = (((VibratoData * (int8_t)hc->VibratoDepth) << 2) + 128) >> 8;
 	if (Song.Header.Flags & ITF_OLD_EFFECTS)
-		VibData = -VibData;
+		VibratoData = -VibratoData;
 
-	if (VibData < 0)
-		PitchSlideDown(hc, sc, -VibData);
+	if (VibratoData < 0)
+		PitchSlideDown(hc, sc, -VibratoData);
 	else
-		PitchSlideUp(hc, sc, VibData);
+		PitchSlideUp(hc, sc, VibratoData);
 }
 
 void CommandH(hostChn_t *hc)
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	sc->Flags |= SF_FREQ_CHANGE;
 
-	hc->VPo += hc->VSp;
+	hc->VibratoPos += hc->VibratoSpeed;
 
-	int8_t VibData;
-	if (hc->VWF == 3)
-		VibData = (Random() & 127) - 64;
+	int8_t VibratoData;
+	if (hc->VibratoWaveform == 3)
+		VibratoData = (Random() & 127) - 64;
 	else
-		VibData = FineSineData[(hc->VWF << 8) + hc->VPo];
+		VibratoData = FineSineData[(hc->VibratoWaveform << 8) + hc->VibratoPos];
 
-	hc->LVi = VibData; // Save last vibrato.
-	CommandH5(hc, sc, VibData);
+	hc->LastVibratoData = VibratoData; // Save last vibrato.
+	CommandH5(hc, sc, VibratoData);
 }
 
 void CommandI(hostChn_t *hc)
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	sc->Flags |= SF_RECALC_VOL;
 
-	hc->TCD--;
-	if ((int8_t)hc->TCD <= 0)
+	hc->TremorCount--;
+	if ((int8_t)hc->TremorCount <= 0)
 	{
-		hc->Too ^= 1;
-		hc->TCD = hc->MiscEfxData[hc->Too];
+		hc->TremorOnOff ^= 1;
+		hc->TremorCount = hc->MiscEfxData[hc->TremorOnOff];
 	}
 
-	if (hc->Too != 1)
+	if (hc->TremorOnOff != 1)
 		sc->Vol = 0;
 }
 
 void CommandJ(hostChn_t *hc)
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	uint16_t tick = *(uint16_t *)&hc->MiscEfxData[0];
 
 	sc->Flags |= SF_FREQ_CHANGE;
@@ -1655,7 +1654,7 @@ void CommandJ(hostChn_t *hc)
 
 	const uint16_t arpNote = *(uint16_t *)&hc->MiscEfxData[tick];
 
-	uint64_t freq = (uint64_t)sc->Frequency * PitchTable[arpNote];
+	uint64_t freq = (uint64_t)sc->Frequency * (uint32_t)PitchTable[arpNote];
 	if (freq & 0xFFFF000000000000) // 8bb: arp freq overflow
 		sc->Frequency = 0;
 	else
@@ -1681,7 +1680,7 @@ void CommandL(hostChn_t *hc)
 
 void CommandN(hostChn_t *hc)
 {
-	uint8_t vol = hc->CV + (int8_t)hc->MiscEfxData[0];
+	uint8_t vol = hc->ChnVol + (int8_t)hc->MiscEfxData[0];
 
 	if ((int8_t)vol < 0)
 		vol = 0;
@@ -1693,9 +1692,9 @@ void CommandN(hostChn_t *hc)
 
 void CommandP(hostChn_t *hc)
 {
-	uint8_t pan = hc->CP;
+	uint8_t pan = hc->ChnPan;
 	if (hc->Flags & HF_CHAN_ON)
-		pan = ((slaveChn_t *)hc->SCOffst)->PS;
+		pan = ((slaveChn_t *)hc->SlaveChnPtr)->PanSet;
 
 	pan += hc->MiscEfxData[0];
 
@@ -1709,16 +1708,16 @@ void CommandP(hostChn_t *hc)
 
 void CommandQ(hostChn_t *hc)
 {
-	hc->RTC--;
-	if ((int8_t)hc->RTC > 0)
+	hc->RetrigCount--;
+	if ((int8_t)hc->RetrigCount > 0)
 		return;
 
 	// OK... reset counter.
-	hc->RTC = hc->Q00 & 0x0F;
+	hc->RetrigCount = hc->Q00 & 0x0F;
 
 	// retrig count done.
 
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	if (Driver.Flags & DF_USES_VOLRAMP)
 	{
 		if (Song.Header.Flags & ITF_INSTR_MODE)
@@ -1730,10 +1729,10 @@ void CommandQ(hostChn_t *hc)
 				{
 					memcpy(scTmp, sc, sizeof (slaveChn_t));
 					sc->Flags |= SF_NOTE_STOP; // Cut
-					sc->HCN |= CHN_DISOWNED;
+					sc->HostChnNum |= CHN_DISOWNED;
 
 					sc = scTmp;
-					hc->SCOffst = scTmp;
+					hc->SlaveChnPtr = scTmp;
 					break;
 				}
 			}
@@ -1743,17 +1742,17 @@ void CommandQ(hostChn_t *hc)
 			slaveChn_t *scTmp = sc + MAX_HOST_CHANNELS;
 			memcpy(scTmp, sc, sizeof (slaveChn_t));
 			scTmp->Flags |= SF_NOTE_STOP; // Cut
-			scTmp->HCN |= CHN_DISOWNED;
+			scTmp->HostChnNum |= CHN_DISOWNED;
 		}
 	}
 
-	sc->SmpError = 0; // 8bb: clear sampling position fraction
+	sc->Frac32 = 0; // 8bb: clear sampling position fraction
 	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
 	sc->SamplingPosition = 0;
 
 	sc->Flags |= (SF_RECALC_FINALVOL | SF_NEW_NOTE | SF_LOOP_CHANGED);
 
-	uint8_t vol = sc->VS;
+	uint8_t vol = sc->VolSet;
 	switch (hc->Q00 >> 4)
 	{
 		default:
@@ -1780,18 +1779,18 @@ void CommandQ(hostChn_t *hc)
 	else if (vol > 64)
 		vol = 64;
 
-	sc->VS = sc->Vol = hc->VSe = vol;
+	sc->VolSet = sc->Vol = hc->VolSet = vol;
 	sc->Flags |= SF_RECALC_VOL;
 
 	if (hc->Smp == 101) // MIDI sample
 		MIDITranslate(hc, sc, MIDICOMMAND_STOPNOTE);
 }
 
-static void CommandR2(hostChn_t *hc, slaveChn_t *sc, int8_t VolData)
+static void CommandR2(hostChn_t *hc, slaveChn_t *sc, int8_t TremoloData)
 {
-	VolData = (((VolData * (int8_t)hc->TDp) << 2) + 128) >> 8;
+	TremoloData = (((TremoloData * (int8_t)hc->TremoloDepth) << 2) + 128) >> 8;
 
-	int16_t vol = sc->Vol + VolData;
+	int16_t vol = sc->Vol + TremoloData;
 	if (vol < 0)
 		vol = 0;
 	else if (vol > 64)
@@ -1802,19 +1801,19 @@ static void CommandR2(hostChn_t *hc, slaveChn_t *sc, int8_t VolData)
 
 void CommandR(hostChn_t *hc)
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 	sc->Flags |= SF_RECALC_VOL;
 
-	hc->TPo += hc->TSp;
+	hc->TremoloPos += hc->TremoloSpeed;
 
-	int8_t VolData;
-	if (hc->TWF == 3)
-		VolData = (Random() & 127) - 64;
+	int8_t TremoloData;
+	if (hc->TremoloWaveform == 3)
+		TremoloData = (Random() & 127) - 64;
 	else
-		VolData = FineSineData[(hc->TWF << 8) + hc->TPo];
+		TremoloData = FineSineData[(hc->TremoloWaveform << 8) + hc->TremoloPos];
 
-	hc->LTr = VolData; // Save last tremelo
-	CommandR2(hc, sc, VolData);
+	hc->LastTremoloData = TremoloData; // Save last tremelo
+	CommandR2(hc, sc, TremoloData);
 }
 
 void CommandS(hostChn_t *hc)
@@ -1832,9 +1831,9 @@ void CommandS(hostChn_t *hc)
 		InitNoCommand(hc);
 		hc->Flags |= HF_ROW_UPDATED;
 
-		bool ChannelMuted = !!(Song.Header.ChnlPan[hc->HCN] & 128);
+		bool ChannelMuted = !!(Song.Header.ChnlPan[hc->HostChnNum] & 128);
 		if (ChannelMuted && !(hc->Flags & HF_FREEPLAY_NOTE) && (hc->Flags & HF_CHAN_ON))
-			((slaveChn_t *)hc->SCOffst)->Flags |= SF_CHN_MUTED;
+			((slaveChn_t *)hc->SlaveChnPtr)->Flags |= SF_CHN_MUTED;
 	}
 	else if (SCmd == 0xC0) // Note cut.
 	{
@@ -1845,7 +1844,7 @@ void CommandS(hostChn_t *hc)
 		if ((int8_t)hc->MiscEfxData[1] > 0)
 			return;
 
-		slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
 		hc->Flags &= ~HF_CHAN_ON;
 
@@ -1897,34 +1896,34 @@ void CommandY(hostChn_t *hc)
 	if (!(hc->Flags & HF_CHAN_ON))
 		return;
 
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
 	int8_t panData;
-	if (hc->PWF >= 3) // 8bb: panbrello waveform
+	if (hc->PanbrelloWaveform >= 3) // 8bb: panbrello waveform
 	{
 		// Random panning make speed the delay time.
 
-		hc->PPo--;
-		if ((int8_t)hc->PPo <= 0)
+		hc->PanbrelloPos--;
+		if ((int8_t)hc->PanbrelloPos <= 0)
 		{
-			hc->PPo = hc->PSp; // reset countdown.
-			hc->LPn = panData = (Random() & 127) - 64;
+			hc->PanbrelloPos = hc->PanbrelloSpeed; // reset countdown.
+			hc->LastPanbrelloData = panData = (Random() & 127) - 64;
 		}
 		else
 		{
-			panData = hc->LPn;
+			panData = hc->LastPanbrelloData;
 		}
 	}
 	else
 	{
-		hc->PPo += hc->PSp;
-		panData = FineSineData[(hc->PWF << 8) + hc->PPo];
+		hc->PanbrelloPos += hc->PanbrelloSpeed;
+		panData = FineSineData[(hc->PanbrelloWaveform << 8) + hc->PanbrelloPos];
 	}
 
-	if (sc->PS != PAN_SURROUND)
+	if (sc->PanSet != PAN_SURROUND)
 	{
-		panData = (((panData * (int8_t)hc->PDp) << 2) + 128) >> 8;
-		panData += sc->PS;
+		panData = (((panData * (int8_t)hc->PanbrelloDepth) << 2) + 128) >> 8;
+		panData += sc->PanSet;
 
 		if (panData < 0)
 			panData = 0;

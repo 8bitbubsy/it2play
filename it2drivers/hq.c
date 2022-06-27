@@ -95,7 +95,7 @@ static void HQ_MixSamples(void)
 		if (!(sc->Flags & SF_CHAN_ON) || sc->Smp == 100)
 			continue;
 
-		sample_t *s = sc->SmpOffs;
+		sample_t *s = sc->SmpPtr;
 		assert(s != NULL);
 
 		if (sc->Flags & SF_NOTE_STOP) // note cut
@@ -111,8 +111,8 @@ static void HQ_MixSamples(void)
 			if ((uint32_t)sc->Frequency > INT32_MAX) // this is my own max limit in this driver
 			{
 				sc->Flags = SF_NOTE_STOP;
-				if (!(sc->HCN & CHN_DISOWNED))
-					((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON; // turn off channel
+				if (!(sc->HostChnNum & CHN_DISOWNED))
+					((hostChn_t *)sc->HostChnPtr)->Flags &= ~HF_CHAN_ON; // turn off channel
 
 				continue;
 			}
@@ -134,21 +134,21 @@ static void HQ_MixSamples(void)
 		{
 			uint8_t FilterQ;
 
-			if (sc->HCN & CHN_DISOWNED)
+			if (sc->HostChnNum & CHN_DISOWNED)
 			{
-				FilterQ = sc->MBank >> 8; // if disowned, use channel filters
+				FilterQ = sc->MIDIBank >> 8; // if disowned, use channel filters
 			}
 			else
 			{
-				uint8_t filterCutOff = Driver.FilterParameters[sc->HCN];
-				FilterQ = Driver.FilterParameters[64+sc->HCN];
+				uint8_t filterCutOff = Driver.FilterParameters[sc->HostChnNum];
+				FilterQ = Driver.FilterParameters[64+sc->HostChnNum];
 
 				sc->VEnvState.CurNode = (filterCutOff << 8) | (sc->VEnvState.CurNode & 0x00FF);
-				sc->MBank = (FilterQ << 8) | (sc->MBank & 0x00FF);
+				sc->MIDIBank = (FilterQ << 8) | (sc->MIDIBank & 0x00FF);
 			}
 
 			// FilterEnvVal (0..255) * CutOff (0..127)
-			const uint16_t FilterFreqValue = (sc->MBank & 0x00FF) * (uint8_t)((uint16_t)sc->VEnvState.CurNode >> 8);
+			const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VEnvState.CurNode >> 8);
 			if (FilterFreqValue != 127*255 || FilterQ != 0)
 			{
 				assert(FilterFreqValue <= 127*255 && FilterQ <= 127);
@@ -173,14 +173,14 @@ static void HQ_MixSamples(void)
 				{
 					sc->fLeftVolume = sc->fRightVolume = Vol * (1.0f / (32768.0f * 128.0f));
 				}
-				else if (sc->FPP == PAN_SURROUND)
+				else if (sc->FinalPlayPan == PAN_SURROUND)
 				{
 					sc->fLeftVolume = sc->fRightVolume = Vol * (0.5f / (32768.0f * 128.0f));
 				}
 				else // normal (panned)
 				{
-					sc->fLeftVolume  = ((64-sc->FPP) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
-					sc->fRightVolume = ((   sc->FPP) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
+					sc->fLeftVolume  = ((64-sc->FinalPlayPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
+					sc->fRightVolume = ((   sc->FinalPlayPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
 				}
 			}
 		}
@@ -190,8 +190,8 @@ static void HQ_MixSamples(void)
 
 		uint32_t MixBlockSize = RealBytesToMix;
 
-		const bool Surround = (sc->FPP == PAN_SURROUND);
-		const bool Sample16Bit = !!(sc->Bit & SMPF_16BIT);
+		const bool Surround = (sc->FinalPlayPan == PAN_SURROUND);
+		const bool Sample16Bit = !!(sc->SmpBitDepth & SMPF_16BIT);
 		const bool Stereo = !!(s->Flags & SMPF_STEREO);
 		const bool FilterActive = (sc->fFilterb > 0.0f) || (sc->fFilterc > 0.0f);
 		MixFunc_t Mix = HQ_MixFunctionTables[(FilterActive << 3) + (Stereo << 2) + (Surround << 1) + Sample16Bit];
@@ -201,14 +201,14 @@ static void HQ_MixSamples(void)
 		if ((int32_t)LoopLength > 0)
 		{
 			float *fMixBufferPtr = fMixBuffer;
-			if (sc->LpM == LOOP_PINGPONG)
+			if (sc->LoopMode == LOOP_PINGPONG)
 			{
 				while (MixBlockSize > 0)
 				{
 					uint32_t NewLoopPos;
 
 					uint32_t SamplesToMix;
-					if (sc->LpD == DIR_BACKWARDS)
+					if (sc->LoopDirection == DIR_BACKWARDS)
 					{
 						SamplesToMix = sc->SamplingPosition - (sc->LoopBeg + 1);
 
@@ -231,7 +231,7 @@ static void HQ_MixSamples(void)
 					MixBlockSize -= SamplesToMix;
 					fMixBufferPtr += SamplesToMix << 1;
 
-					if (sc->LpD == DIR_BACKWARDS)
+					if (sc->LoopDirection == DIR_BACKWARDS)
 					{
 						if (sc->SamplingPosition <= sc->LoopBeg)
 						{
@@ -242,7 +242,7 @@ static void HQ_MixSamples(void)
 							}
 							else
 							{
-								sc->LpD = DIR_FORWARDS;
+								sc->LoopDirection = DIR_FORWARDS;
 								sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
 								sc->Frac64 = (uint32_t)(0 - sc->Frac64);
 							}
@@ -259,7 +259,7 @@ static void HQ_MixSamples(void)
 							}
 							else
 							{
-								sc->LpD = DIR_BACKWARDS;
+								sc->LoopDirection = DIR_BACKWARDS;
 								sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
 								sc->Frac64 = (uint32_t)(0 - sc->Frac64);
 							}
@@ -267,7 +267,7 @@ static void HQ_MixSamples(void)
 					}
 				}
 			}
-			else if (sc->LpM == LOOP_FORWARDS)
+			else if (sc->LoopMode == LOOP_FORWARDS)
 			{
 				while (MixBlockSize > 0)
 				{
@@ -306,8 +306,8 @@ static void HQ_MixSamples(void)
 					if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 					{
 						sc->Flags = SF_NOTE_STOP;
-						if (!(sc->HCN & CHN_DISOWNED))
-							((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON;
+						if (!(sc->HostChnNum & CHN_DISOWNED))
+							((hostChn_t *)sc->HostChnPtr)->Flags &= ~HF_CHAN_ON;
 
 						// sample ended, ramp out very last sample point for the remaining samples
 						for (; MixBlockSize > 0; MixBlockSize--)

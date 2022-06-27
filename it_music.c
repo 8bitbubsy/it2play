@@ -226,9 +226,9 @@ static void MIDISendFilter(hostChn_t *hc, slaveChn_t *sc, uint8_t Data)
 		{
 			bool IsFilterQ = (InterpretType == 1);
 			if (IsFilterQ)
-				Driver.FilterParameters[(64 + hc->HCN) & 127] = Data;
+				Driver.FilterParameters[(64 + hc->HostChnNum) & 127] = Data;
 			else
-				Driver.FilterParameters[hc->HCN & 127] = Data;
+				Driver.FilterParameters[hc->HostChnNum & 127] = Data;
 
 			if (sc != NULL)
 				sc->Flags |= SF_RECALC_FINALVOL;
@@ -340,7 +340,7 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 			if (sc == NULL)
 				continue;
 
-			MIDIData = (MIDIData << 4) | (sc->MCh-1);
+			MIDIData = (MIDIData << 4) | (sc->MIDIChn-1);
 			CharsParsed++;
 
 			if (CharsParsed >= 2)
@@ -371,11 +371,11 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 		{
 			if (Byte == 'n'-'a') // Note?
 			{
-				MIDISendFilter(hc, sc, sc->Nte);
+				MIDISendFilter(hc, sc, sc->Note);
 			}
 			else if (Byte == 'm'-'a') // 8bb: MIDI note (sample loop direction on sample channels)
 			{
-				MIDISendFilter(hc, sc, sc->LpD);
+				MIDISendFilter(hc, sc, sc->LoopDirection);
 			}
 			else if (Byte == 'v'-'a') // Velocity?
 			{
@@ -385,8 +385,8 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 				}
 				else
 				{
-					uint16_t volume = (sc->VS * Song.GlobalVolume * sc->CVl) >> 4;
-					volume = (volume * sc->SVl) >> 15;
+					uint16_t volume = (sc->VolSet * Song.GlobalVolume * sc->ChnVol) >> 4;
+					volume = (volume * sc->SmpVol) >> 15;
 
 					if (volume == 0)
 						volume = 1;
@@ -404,7 +404,7 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 				}
 				else
 				{
-					uint16_t volume = sc->FV;
+					uint16_t volume = sc->FinalVol;
 
 					if (volume == 0)
 						volume = 1;
@@ -416,7 +416,7 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 			}
 			else if (Byte == 'h'-'a') // HCN (8bb: host channel number)
 			{
-				MIDISendFilter(hc, sc, sc->HCN & 0x7F);
+				MIDISendFilter(hc, sc, sc->HostChnNum & 0x7F);
 			}
 			else if (Byte == 'x'-'a') // Pan set
 			{
@@ -431,15 +431,15 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 			}
 			else if (Byte == 'p'-'a') // Program?
 			{
-				MIDISendFilter(hc, sc, sc->MPr);
+				MIDISendFilter(hc, sc, sc->MIDIProg);
 			}
 			else if (Byte == 'b'-'a') // 8bb: MIDI bank low
 			{
-				MIDISendFilter(hc, sc, sc->MBank & 0xFF);
+				MIDISendFilter(hc, sc, sc->MIDIBank & 0xFF);
 			}
 			else if (Byte == 'a'-'a') // 8bb: MIDI bank high
 			{
-				MIDISendFilter(hc, sc, sc->MBank >> 8);
+				MIDISendFilter(hc, sc, sc->MIDIBank >> 8);
 			}
 		}
 
@@ -450,33 +450,33 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 
 void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 {
-	sc->InsOffs = ins;
+	sc->InsPtr = ins;
 
 	sc->NNA = ins->NNA;
 	sc->DCT = ins->DCT;
 	sc->DCA = ins->DCA;
 
-	if (hc->MCh != 0) // 8bb: MIDI?
+	if (hc->MIDIChn != 0) // 8bb: MIDI?
 	{
-		sc->MCh = ins->MCh;
-		sc->MPr = ins->MPr;
-		sc->MBank = ins->MIDIBnk;
-		sc->LpD = hc->Nte; // 8bb: during MIDI, LpD = MIDI note
+		sc->MIDIChn = ins->MIDIChn;
+		sc->MIDIProg = ins->MIDIProg;
+		sc->MIDIBank = ins->MIDIBank;
+		sc->LoopDirection = hc->RawNote; // 8bb: during MIDI, LpD = MIDI note
 	}
 
-	sc->CVl = hc->CV;
+	sc->ChnVol = hc->ChnVol;
 
-	uint8_t pan = (ins->DfP & 0x80) ? hc->CP : ins->DfP;
+	uint8_t pan = (ins->DefPan & 0x80) ? hc->ChnPan : ins->DefPan;
 	if (hc->Smp != 0)
 	{
 		sample_t *s = &Song.Smp[hc->Smp-1];
-		if (s->DfP & 0x80)
-			pan = s->DfP & 127;
+		if (s->DefPan & 0x80)
+			pan = s->DefPan & 127;
 	}
 
 	if (pan != PAN_SURROUND)
 	{
-		int16_t newPan = pan + (((int8_t)(hc->Nte - ins->PPC) * (int8_t)ins->PPS) >> 3);
+		int16_t newPan = pan + (((int8_t)(hc->RawNote - ins->PitchPanCenter) * (int8_t)ins->PitchPanSep) >> 3);
 
 		if (newPan < 0)
 			newPan = 0;
@@ -486,7 +486,7 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 		pan = (uint8_t)newPan;
 	}
 
-	sc->Pan = sc->PS = pan;
+	sc->Pan = sc->PanSet = pan;
 
 	// Envelope init
 	sc->VEnvState.Value = 64 << 16; // 8bb: clears fractional part
@@ -503,24 +503,24 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 
 	sc->Flags = SF_CHAN_ON + SF_RECALC_PAN + SF_RECALC_VOL + SF_FREQ_CHANGE + SF_NEW_NOTE;
 
-	if (ins->VEnvelope.Flags & ENVF_ENABLED) sc->Flags |= SF_VOLENV_ON;
-	if (ins->PEnvelope.Flags & ENVF_ENABLED) sc->Flags |= SF_PANENV_ON;
-	if (ins->PtEnvelope.Flags & ENVF_ENABLED) sc->Flags |= SF_PITCHENV_ON;
+	if (ins->VolEnv.Flags & ENVF_ENABLED) sc->Flags |= SF_VOLENV_ON;
+	if (ins->PanEnv.Flags & ENVF_ENABLED) sc->Flags |= SF_PANENV_ON;
+	if (ins->PitchEnv.Flags & ENVF_ENABLED) sc->Flags |= SF_PITCHENV_ON;
 
 	if (LastSlaveChannel != NULL)
 	{
 		slaveChn_t *lastSC = LastSlaveChannel;
 
-		if ((ins->VEnvelope.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer volume data
+		if ((ins->VolEnv.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer volume data
 		{
 			sc->VEnvState.Value = lastSC->VEnvState.Value;
 			sc->VEnvState.Delta = lastSC->VEnvState.Delta;
 			sc->VEnvState.Tick = lastSC->VEnvState.Tick;
-			sc->VEnvState.CurNode = lastSC->VEnvState.CurNode; // 8bb: also clears certain temporary filter cutoff...
+			sc->VEnvState.CurNode = lastSC->VEnvState.CurNode;
 			sc->VEnvState.NextTick = lastSC->VEnvState.NextTick;
 		}
 
-		if ((ins->PEnvelope.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer pan data
+		if ((ins->PanEnv.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer pan data
 		{
 			sc->PEnvState.Value = lastSC->PEnvState.Value;
 			sc->PEnvState.Delta = lastSC->PEnvState.Delta;
@@ -529,7 +529,7 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 			sc->PEnvState.NextTick = lastSC->PEnvState.NextTick;
 		}
 
-		if ((ins->PtEnvelope.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer pitch data
+		if ((ins->PitchEnv.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer pitch data
 		{
 			sc->PtEnvState.Value = lastSC->PtEnvState.Value;
 			sc->PtEnvState.Delta = lastSC->PtEnvState.Delta;
@@ -541,20 +541,20 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 
 	hc->Flags |= HF_APPLY_RANDOM_VOL; // Apply random volume/pan
 
-	if (hc->MCh == 0)
+	if (hc->MIDIChn == 0)
 	{
-		sc->MBank = 0x00FF; // 8bb: reset filter resonance (Q) & cutoff
+		sc->MIDIBank = 0x00FF; // 8bb: reset filter resonance (Q) & cutoff
 
-		if (ins->IFC & 0x80) // If IFC bit 7 == 1, then set filter cutoff
+		if (ins->FilterCutoff & 0x80) // If IFC bit 7 == 1, then set filter cutoff
 		{
-			uint8_t filterCutOff = ins->IFC & 0x7F;
+			uint8_t filterCutOff = ins->FilterCutoff & 0x7F;
 			SetFilterCutoff(hc, sc, filterCutOff);
 		}
 
-		if (ins->IFR & 0x80) // If IFR bit 7 == 1, then set filter resonance
+		if (ins->FilterResonance & 0x80) // If IFR bit 7 == 1, then set filter resonance
 		{
-			const uint8_t filterQ = ins->IFR & 0x7F;
-			sc->MBank = (filterQ << 8) | (sc->MBank & 0x00FF);
+			const uint8_t filterQ = ins->FilterResonance & 0x7F;
+			sc->MIDIBank = (filterQ << 8) | (sc->MIDIBank & 0x00FF);
 			SetFilterResonance(hc, sc, filterQ);
 		}
 	}
@@ -565,25 +565,25 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 {
 	// Sample handler
 
-	slaveChn_t *sc = &sChn[hc->HCN];
+	slaveChn_t *sc = &sChn[hc->HostChnNum];
 	if ((Driver.Flags & DF_USES_VOLRAMP) && (sc->Flags & SF_CHAN_ON))
 	{
 		// copy out channel
 		sc->Flags |= SF_NOTE_STOP;
-		sc->HCN |= CHN_DISOWNED;
+		sc->HostChnNum |= CHN_DISOWNED;
 		memcpy(sc + MAX_HOST_CHANNELS, sc, sizeof (slaveChn_t));
 	}
 
-	hc->SCOffst = sc;
-	sc->HCOffst = hc;
-	sc->HCN = hc->HCN;
+	hc->SlaveChnPtr = sc;
+	sc->HostChnPtr = hc;
+	sc->HostChnNum = hc->HostChnNum;
 
-	sc->CVl = hc->CV;
-	sc->Pan = sc->PS = hc->CP;
+	sc->ChnVol = hc->ChnVol;
+	sc->Pan = sc->PanSet = hc->ChnPan;
 	sc->FadeOut = 1024;
 	sc->VEnvState.Value = (64 << 16) | (sc->VEnvState.Value & 0xFFFF); // 8bb: keeps frac
-	sc->MBank = 0x00FF; // Filter cutoff
-	sc->Nte = hc->Nte;
+	sc->MIDIBank = 0x00FF; // Filter cutoff
+	sc->Note = hc->RawNote;
 	sc->Ins = hc->Ins;
 
 	sc->Flags = SF_CHAN_ON + SF_RECALC_PAN + SF_RECALC_VOL + SF_FREQ_CHANGE + SF_NEW_NOTE;
@@ -591,14 +591,13 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 	if (hc->Smp > 0)
 	{
 		sc->Smp = hc->Smp - 1;
-		sample_t *s = &Song.Smp[sc->Smp];
-		sc->SmpOffs = s;
+		sample_t *s = sc->SmpPtr = &Song.Smp[sc->Smp];
 
-		sc->Bit = 0;
-		sc->ViDepth = sc->ViP = 0; // Reset vibrato info.
+		sc->SmpBitDepth = 0; // 8bb: 8-bit
+		sc->AutoVibratoDepth = sc->AutoVibratoPos = 0;
 		sc->PEnvState.Value &= 0xFFFF; // No pan deviation (8bb: keeps frac)
 		sc->PtEnvState.Value &= 0xFFFF; // No pitch deviation (8bb: keeps frac)
-		sc->LpD = DIR_FORWARDS; // Reset loop dirn
+		sc->LoopDirection = DIR_FORWARDS; // Reset loop dirn
 
 		if (s->Length == 0 || !(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
 		{
@@ -607,8 +606,8 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 			return NULL;
 		}
 
-		sc->Bit = s->Flags & SMPF_16BIT;
-		sc->SVl = s->GvL * 2;
+		sc->SmpBitDepth = s->Flags & SMPF_16BIT;
+		sc->SmpVol = s->GlobVol * 2;
 		return sc;
 	}
 	else // No sample!
@@ -624,19 +623,19 @@ static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, inst
 {
 	assert(hc != NULL && sc != NULL && ins != NULL);
 
-	hc->SCOffst = sc;
-	sc->HCN = hc->HCN;
-	sc->HCOffst = hc;
+	hc->SlaveChnPtr = sc;
+	sc->HostChnNum = hc->HostChnNum;
+	sc->HostChnPtr = hc;
 
-	sc->Bit = 0;
-	sc->ViDepth = sc->ViP = 0; // Reset vibrato info.
-	sc->LpD = DIR_FORWARDS; // Reset loop dirn
+	sc->SmpBitDepth = 0; // 8bb: 8-bit
+	sc->AutoVibratoDepth = sc->AutoVibratoPos = 0;
+	sc->LoopDirection = DIR_FORWARDS; // Reset loop dirn
 
 	InitPlayInstrument(hc, sc, ins);
 
-	sc->SVl = ins->GbV;
+	sc->SmpVol = ins->GlobVol;
 	sc->FadeOut = 1024;
-	sc->Nte = (hc->Smp == 101) ? hc->Nt2 : hc->Nte;
+	sc->Note = (hc->Smp == 101) ? hc->TranslatedNote : hc->RawNote;
 	sc->Ins = hc->Ins;
 
 	if (hc->Smp == 0)
@@ -648,8 +647,7 @@ static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, inst
 	}
 
 	sc->Smp = hc->Smp-1;
-	sample_t *s = &Song.Smp[sc->Smp];
-	sc->SmpOffs = s;
+	sample_t *s = sc->SmpPtr = &Song.Smp[sc->Smp];
 
 	if (s->Length == 0 || !(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
 	{
@@ -659,42 +657,42 @@ static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, inst
 		return NULL;
 	}
 
-	sc->Bit = s->Flags & SMPF_16BIT;
-	sc->SVl = (s->GvL * sc->SVl) >> 6; // 0->128
+	sc->SmpBitDepth = s->Flags & SMPF_16BIT;
+	sc->SmpVol = (s->GlobVol * sc->SmpVol) >> 6; // 0->128
 	return sc;
 }
 
 // 8bb: this function is used in AllocateChannel()
-static bool DuplicateCheck(slaveChn_t **scOut, hostChn_t *hc, uint8_t hostChannel, instrument_t *ins, uint8_t dupeType, uint8_t hostDupeVal)
+static bool DuplicateCheck(slaveChn_t **scOut, hostChn_t *hc, uint8_t hostChnNum, instrument_t *ins, uint8_t DCT, uint8_t DCVal)
 {
 	slaveChn_t *sc = AllocateSlaveOffset;
 	for (uint32_t i = 0; i < AllocateNumChannels; i++, sc++) 
 	{
 		*scOut = sc; // 8bb: copy current slave channel pointer to scOut
 
-		if (!(sc->Flags & SF_CHAN_ON) || (hc->Smp != 101 && sc->HCN != hostChannel) || sc->Ins != hc->Ins)
+		if (!(sc->Flags & SF_CHAN_ON) || (hc->Smp != 101 && sc->HostChnNum != hostChnNum) || sc->Ins != hc->Ins)
 			continue;
 
 		// 8bb: the actual duplicate test
 
-		if (dupeType == DCT_NOTE && sc->Nte != hostDupeVal)
+		if (DCT == DCT_NOTE && sc->Note != DCVal)
 			continue;
 
-		if (dupeType == DCT_SAMPLE && sc->Smp != hostDupeVal)
+		if (DCT == DCT_SAMPLE && sc->Smp != DCVal)
 			continue;
 
-		if (dupeType == DCT_INSTRUMENT && sc->Ins != hostDupeVal)
+		if (DCT == DCT_INSTRUMENT && sc->Ins != DCVal)
 			continue;
 
 		if (hc->Smp == 101) // New note is a MIDI?
 		{
-			if (sc->Smp == 100 && sc->MCh == hostChannel) // Is current channel a MIDI chan
+			if (sc->Smp == 100 && sc->MIDIChn == hostChnNum) // Is current channel a MIDI chan
 			{
 				sc->Flags |= SF_NOTE_STOP;
-				if (!(sc->HCN & CHN_DISOWNED))
+				if (!(sc->HostChnNum & CHN_DISOWNED))
 				{
-					sc->HCN |= CHN_DISOWNED;
-					((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON;
+					sc->HostChnNum |= CHN_DISOWNED;
+					((hostChn_t *)sc->HostChnPtr)->Flags &= ~HF_CHAN_ON;
 				}
 			}
 		}
@@ -732,22 +730,22 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 	}
 
 	// 8bb: some of these are initialized only to prevent compiler warnings
-	uint8_t NNAType = 0;
+	uint8_t NNA = 0;
 	slaveChn_t *sc = NULL;
-	uint8_t hostChannel, dupeType, hostDupeVal;
+	uint8_t hostChnNum, DCT, DCVal;
 
 	instrument_t *ins = &Song.Ins[hc->Ins-1];
 
 	bool scInitialized = false;
 	if ((*hcFlags) & HF_CHAN_ON) // 8bb: host channel on?
 	{
-		sc = (slaveChn_t *)hc->SCOffst;
-		if (sc->InsOffs == ins) // 8bb: slave channel has same inst. as host channel?
+		sc = (slaveChn_t *)hc->SlaveChnPtr;
+		if (sc->InsPtr == ins) // 8bb: slave channel has same inst. as host channel?
 			LastSlaveChannel = sc;
 
-		NNAType = sc->NNA;
-		if (NNAType != NNA_NOTE_CUT) // 8bb: not note-cut
-			sc->HCN |= CHN_DISOWNED; // Disown channel
+		NNA = sc->NNA;
+		if (NNA != NNA_NOTE_CUT) // 8bb: not note-cut
+			sc->HostChnNum |= CHN_DISOWNED; // Disown channel
 
 		scInitialized = true;
 	}
@@ -757,14 +755,14 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		bool skipMIDITest = false;
 		if (scInitialized)
 		{
-			if (NNAType != NNA_NOTE_CUT && sc->VS > 0 && sc->CVl > 0 && sc->SVl > 0)
+			if (NNA != NNA_NOTE_CUT && sc->VolSet > 0 && sc->ChnVol > 0 && sc->SmpVol > 0)
 			{
-				if (NNAType == NNA_NOTE_OFF)
+				if (NNA == NNA_NOTE_OFF)
 				{
 					sc->Flags |= SF_NOTE_OFF;
 					GetLoopInformation(sc); // 8bb: update sample loop (sustain released)
 				}
-				else if (NNAType >= NNA_NOTE_FADE)
+				else if (NNA >= NNA_NOTE_FADE)
 				{
 					sc->Flags |= SF_FADEOUT;
 				}
@@ -776,7 +774,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 				if (sc->Smp == 100) // MIDI?
 				{
 					sc->Flags |= SF_NOTE_STOP;
-					sc->HCN |= CHN_DISOWNED; // Disown channel
+					sc->HostChnNum |= CHN_DISOWNED; // Disown channel
 
 					if (hc->Smp != 101)
 						break; // Sample.. (8bb: find available voice now)
@@ -786,7 +784,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 					if (Driver.Flags & DF_USES_VOLRAMP)
 					{
 						sc->Flags |= SF_NOTE_STOP;
-						sc->HCN |= CHN_DISOWNED; // Disown channel
+						sc->HostChnNum |= CHN_DISOWNED; // Disown channel
 						break; // 8bb: find available voice now
 					}
 
@@ -799,30 +797,30 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			}
 		}
 
-		hostChannel = dupeType = hostDupeVal = 0; // 8bb: prevent stupid compiler warning...
+		hostChnNum = DCT = DCVal = 0; // 8bb: prevent stupid compiler warning...
 
 		bool doDupeCheck = false;
 		if (!skipMIDITest && hc->Smp == 101)
 		{
 			// 8bb: MIDI note, do a "duplicate note" check regardless of instrument's DCT setting
-			hostChannel = hc->MCh;
-			dupeType = DCT_NOTE;
-			hostDupeVal = hc->Nt2;
+			hostChnNum = hc->MIDIChn;
+			DCT = DCT_NOTE;
+			DCVal = hc->TranslatedNote;
 
 			doDupeCheck = true;
 		}
 		else if (ins->DCT != DCT_DISABLED)
 		{
-			hostChannel = hc->HCN | CHN_DISOWNED; // 8bb: only search disowned host channels
-			dupeType = ins->DCT;
+			hostChnNum = hc->HostChnNum | CHN_DISOWNED; // 8bb: only search disowned host channels
+			DCT = ins->DCT;
 
 			if (ins->DCT == DCT_NOTE)
 			{
-				hostDupeVal = hc->Nte;
+				DCVal = hc->RawNote; // 8bb: not the translated note!
 			}
 			else if (ins->DCT == DCT_INSTRUMENT)
 			{
-				hostDupeVal = hc->Ins;
+				DCVal = hc->Ins;
 			}
 			else
 			{
@@ -830,8 +828,8 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 				** .ITs from OpenMPT can have DCT=4, which tests for duplicate instrument plugins.
 				** This will be handled as DCT_SAMPLE in Impulse Tracker. Oops...
 				*/
-				hostDupeVal = hc->Smp - 1;
-				if ((int8_t)hostDupeVal < 0)
+				DCVal = hc->Smp - 1;
+				if ((int8_t)DCVal < 0)
 					break; // 8bb: illegal (or no) sample, ignore dupe test and find available voice now
 			}
 
@@ -841,20 +839,20 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		if (doDupeCheck) // 8bb: NNA Duplicate Check
 		{
 			sc = AllocateSlaveOffset;
-			if (DuplicateCheck(&sc, hc, hostChannel, ins, dupeType, hostDupeVal))
+			if (DuplicateCheck(&sc, hc, hostChnNum, ins, DCT, DCVal))
 			{
 				// 8bb: dupe found!
 
 				scInitialized = true; // 8bb: we have an sc pointer now (we could come from a shutdown host channel)
 				if (ins->DCA == DCA_NOTE_CUT)
 				{
-					NNAType = NNA_NOTE_CUT;
+					NNA = NNA_NOTE_CUT;
 				}
 				else
 				{
 					sc->DCT = DCT_DISABLED; // 8bb: turn of dupe check so that we don't do infinite NNA tests :)
 					sc->DCA = DCA_NOTE_CUT;
-					NNAType = ins->DCA + 1;
+					NNA = ins->DCA + 1;
 				}
 
 				continue; // 8bb: do another NNA test with the new NNA type
@@ -884,9 +882,9 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			if (!(sc->Flags & SF_CHAN_ON))
 			{
 				// Have a channel.. check that it's host's slave isn't SI (8bb: SI = sc)
-				hostChn_t *hcTmp = (hostChn_t *)sc->HCOffst;
+				hostChn_t *hcTmp = (hostChn_t *)sc->HostChnPtr;
 
-				if (hcTmp == NULL || hcTmp->SCOffst != sc)
+				if (hcTmp == NULL || hcTmp->SlaveChnPtr != sc)
 					return AllocateChannelInstrument(hc, sc, ins, hcFlags);
 			}
 		}
@@ -905,10 +903,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			continue;
 
 		ChannelCountTable[sc->Smp]++;
-		if ((sc->HCN & CHN_DISOWNED) && sc->FV < ChannelVolumeTable[sc->Smp])
+		if ((sc->HostChnNum & CHN_DISOWNED) && sc->FinalVol < ChannelVolumeTable[sc->Smp])
 		{
 			ChannelLocationTable[sc->Smp] = sc;
-			ChannelVolumeTable[sc->Smp] = sc->FV;
+			ChannelVolumeTable[sc->Smp] = sc->FinalVol;
 		}
 	}
 
@@ -937,21 +935,20 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 
 	sc = AllocateSlaveOffset;
 	for (uint32_t i = 0; i < AllocateNumChannels; i++, sc++)
-		ChannelCountTable[sc->HCN & 63]++;
+		ChannelCountTable[sc->HostChnNum & 63]++;
 
 	// OK.. search through and find the most heavily used channel
 	uint8_t lowestVol;
 	while (true)
 	{
-		uint8_t hostCh = 0;
-
+		hostChnNum = 0;
 		count = 1;
 		for (uint8_t i = 0; i < MAX_HOST_CHANNELS; i++)
 		{
 			if (count < ChannelCountTable[i])
 			{
 				count = ChannelCountTable[i];
-				hostCh = i;
+				hostChnNum = i;
 			}
 		}
 
@@ -965,10 +962,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			lowestVol = 255;
 			for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 			{
-				if ((scTmp->HCN & CHN_DISOWNED) && scTmp->FV <= lowestVol)
+				if ((scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol <= lowestVol)
 				{
 					sc = scTmp;
-					lowestVol = scTmp->FV;
+					lowestVol = scTmp->FinalVol;
 				}
 			}
 
@@ -981,7 +978,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			return AllocateChannelInstrument(hc, sc, ins, hcFlags);
 		}
 
-		hostCh |= CHN_DISOWNED; // Search for disowned only
+		hostChnNum |= CHN_DISOWNED; // Search for disowned only
 		sc = NULL; // Offset
 
 		lowestVol = 255;
@@ -990,7 +987,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		slaveChn_t *scTmp = AllocateSlaveOffset;
 		for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 		{
-			if (scTmp->HCN != hostCh || scTmp->FV >= lowestVol)
+			if (scTmp->HostChnNum != hostChnNum || scTmp->FinalVol >= lowestVol)
 				continue;
 
 			// Now check if any other channel contains this sample
@@ -998,7 +995,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			if (scTmp->Smp == targetSmp)
 			{
 				sc = scTmp;
-				lowestVol = scTmp->FV;
+				lowestVol = scTmp->FinalVol;
 				continue;
 			}
 
@@ -1012,7 +1009,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 				{
 					// OK found a second sample.
 					sc = scTmp;
-					lowestVol = scTmp->FV;
+					lowestVol = scTmp->FinalVol;
 					break;
 				}
 			}
@@ -1022,7 +1019,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		if (sc != NULL)
 			break; // 8bb: done
 
-		ChannelCountTable[hostCh & 63] = 0; // Next cycle...
+		ChannelCountTable[hostChnNum & 63] = 0; // Next cycle...
 	}
 
 	// 8bb: we have a slave channel in sc at this point
@@ -1032,10 +1029,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 	slaveChn_t *scTmp = AllocateSlaveOffset;
 	for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 	{
-		if (scTmp->Smp == sc->Smp && (scTmp->HCN & CHN_DISOWNED) && scTmp->FV < lowestVol)
+		if (scTmp->Smp == sc->Smp && (scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol < lowestVol)
 		{
 			sc = scTmp;
-			lowestVol = scTmp->FV;
+			lowestVol = scTmp->FinalVol;
 		}
 	}
 
@@ -1070,7 +1067,9 @@ void GetLoopInformation(slaveChn_t *sc)
 	uint8_t LoopMode;
 	int32_t LoopBeg, LoopEnd;
 
-	sample_t *s = sc->SmpOffs;
+	assert(sc->SmpPtr != NULL);
+	sample_t *s = sc->SmpPtr;
+
 	bool LoopEnabled = !!(s->Flags & (SMPF_USE_LOOP | SMPF_USE_SUSLOOP));
 	bool SusOffAndNoNormalLoop = (s->Flags & SMPF_USE_SUSLOOP) && (sc->Flags & SF_NOTE_OFF) && !(s->Flags & SMPF_USE_LOOP);
 
@@ -1100,9 +1099,9 @@ void GetLoopInformation(slaveChn_t *sc)
 	}
 
 	// 8bb: if any parameter changed, update all
-	if (sc->LpM != LoopMode || sc->LoopBeg != LoopBeg || sc->LoopEnd != LoopEnd)
+	if (sc->LoopMode != LoopMode || sc->LoopBeg != LoopBeg || sc->LoopEnd != LoopEnd)
 	{
-		sc->LpM = LoopMode;
+		sc->LoopMode = LoopMode;
 		sc->LoopBeg = LoopBeg;
 		sc->LoopEnd = LoopEnd;
 		sc->Flags |= SF_LOOP_CHANGED;
@@ -1111,36 +1110,36 @@ void GetLoopInformation(slaveChn_t *sc)
 
 void ApplyRandomValues(hostChn_t *hc)
 {
-	slaveChn_t *sc = (slaveChn_t *)hc->SCOffst;
-	instrument_t *ins = sc->InsOffs;
+	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
+	instrument_t *ins = sc->InsPtr;
 
 	hc->Flags &= ~HF_APPLY_RANDOM_VOL;
 
 	int8_t value = Random(); // -128->+127
-	if (ins->RV != 0) // Random volume, 0->100
+	if (ins->RandVol != 0) // Random volume, 0->100
 	{
-		int16_t volume = (((int8_t)ins->RV * value) >> 6) + 1;
-		volume = sc->SVl + ((volume * (int16_t)sc->SVl) / 199);
+		int16_t volume = (((int8_t)ins->RandVol * value) >> 6) + 1;
+		volume = sc->SmpVol + ((volume * (int16_t)sc->SmpVol) / 199);
 
 		if (volume < 0)
 			volume = 0;
 		else if (volume > 128)
 			volume = 128;
 
-		sc->SVl = (uint8_t)volume;
+		sc->SmpVol = (uint8_t)volume;
 	}
 
 	value = Random(); // -128->+127
-	if (ins->RP != 0 && sc->Pan != PAN_SURROUND) // Random pan, 0->64
+	if (ins->RandPan != 0 && sc->Pan != PAN_SURROUND) // Random pan, 0->64
 	{
-		int16_t pan = sc->Pan + (((int8_t)ins->RP * value) >> 7);
+		int16_t pan = sc->Pan + (((int8_t)ins->RandPan * value) >> 7);
 
 		if (pan < 0)
 			pan = 0;
 		else if (pan > 64)
 			pan = 64;
 
-		sc->Pan = sc->PS = (uint8_t)pan;
+		sc->Pan = sc->PanSet = (uint8_t)pan;
 	}
 }
 
@@ -1348,45 +1347,45 @@ void PitchSlideDown(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 static uint8_t *Music_GetPattern(uint32_t pattern, uint16_t *numRows)
 {
 	assert(pattern < MAX_PATTERNS);
-	pattern_t *pat = &Song.Pat[pattern];
+	pattern_t *p = &Song.Patt[pattern];
 
-	if (pat->PackedData == NULL)
+	if (p->PackedData == NULL)
 	{
 		*numRows = 64;
 		return EmptyPattern;
 	}
 
-	*numRows = pat->Rows;
-	return pat->PackedData;
+	*numRows = p->Rows;
+	return p->PackedData;
 }
 
 static void PreInitCommand(hostChn_t *hc)
 {
-	if (hc->Msk & 0x33)
+	if (hc->NotePackMask & 0x33)
 	{
-		if (!(Song.Header.Flags & ITF_INSTR_MODE) || hc->Nte >= 120 || hc->Ins == 0)
+		if (!(Song.Header.Flags & ITF_INSTR_MODE) || hc->RawNote >= 120 || hc->Ins == 0)
 		{
-			hc->Nt2 = hc->Nte;
+			hc->TranslatedNote = hc->RawNote;
 			hc->Smp = hc->Ins;
 		}
 		else
 		{
 			instrument_t *ins = &Song.Ins[hc->Ins-1];
 
-			hc->Nt2 = ins->SmpNoteTable[hc->Nte] & 0xFF;
+			hc->TranslatedNote = ins->SmpNoteTable[hc->RawNote] & 0xFF;
 
 			/* 8bb:
 			** Added >128 check to prevent instruments with ModPlug/OpenMPT plugins
 			** from being handled as MIDI (would result in silence, and crash IT2).
 			*/
-			if (ins->MCh == 0 || ins->MCh > 128)
+			if (ins->MIDIChn == 0 || ins->MIDIChn > 128)
 			{
-				hc->Smp = ins->SmpNoteTable[hc->Nte] >> 8;
+				hc->Smp = ins->SmpNoteTable[hc->RawNote] >> 8;
 			}
 			else // 8bb: MIDI
 			{
-				hc->MCh = (ins->MCh == 17) ? (hc->HCN & 0x0F) + 1 : ins->MCh;
-				hc->MPr = ins->MPr;
+				hc->MIDIChn = (ins->MIDIChn == 17) ? (hc->HostChnNum & 0x0F) + 1 : ins->MIDIChn;
+				hc->MIDIProg = ins->MIDIProg;
 				hc->Smp = 101;
 			}
 
@@ -1399,9 +1398,9 @@ static void PreInitCommand(hostChn_t *hc)
 
 	hc->Flags |= HF_ROW_UPDATED;
 
-	bool ChannelMuted = !!(Song.Header.ChnlPan[hc->HCN] & 128);
+	bool ChannelMuted = !!(Song.Header.ChnlPan[hc->HostChnNum] & 128);
 	if (ChannelMuted && !(hc->Flags & HF_FREEPLAY_NOTE) && (hc->Flags & HF_CHAN_ON))
-		((slaveChn_t *)hc->SCOffst)->Flags |= SF_CHN_MUTED;
+		((slaveChn_t *)hc->SlaveChnPtr)->Flags |= SF_CHN_MUTED;
 }
 
 static void UpdateGOTONote(void) // Get offset
@@ -1419,8 +1418,8 @@ static void UpdateGOTONote(void) // Get offset
 	{
 		while (true)
 		{
-			uint8_t chNr = *p++;
-			if (chNr == 0)
+			uint8_t chnNum = *p++;
+			if (chnNum == 0)
 			{
 				rowsTodo--;
 				if (rowsTodo == 0)
@@ -1429,23 +1428,23 @@ static void UpdateGOTONote(void) // Get offset
 				continue;
 			}
 
-			hostChn_t *hc = &hChn[(chNr & 0x7F) - 1];
-			if (chNr & 0x80)
-				hc->Msk = *p++;
+			hostChn_t *hc = &hChn[(chnNum & 0x7F) - 1];
+			if (chnNum & 0x80)
+				hc->NotePackMask = *p++;
 
-			if (hc->Msk & 1)
-				hc->Nte = *p++;
+			if (hc->NotePackMask & 1)
+				hc->RawNote = *p++;
 
-			if (hc->Msk & 2)
+			if (hc->NotePackMask & 2)
 				hc->Ins = *p++;
 
-			if (hc->Msk & 4)
+			if (hc->NotePackMask & 4)
 				hc->Vol = *p++;
 
-			if (hc->Msk & 8)
+			if (hc->NotePackMask & 8)
 			{
-				hc->OCm = *p++;
-				hc->OCmVal = *p++;
+				hc->OldCmd = *p++;
+				hc->OldCmdVal = *p++;
 			}
 		}
 	}
@@ -1469,32 +1468,32 @@ static void UpdateNoteData(void)
 	uint8_t *p = Song.PatternOffset;
 	while (true)
 	{
-		uint8_t chNr = *p++;
-		if (chNr == 0) // No more! else... go through decoding
+		uint8_t chnNum = *p++;
+		if (chnNum == 0) // No more! else... go through decoding
 			break;
 
-		hc = &hChn[(chNr & 0x7F) - 1];
-		if (chNr & 0x80)
-			hc->Msk = *p++;
+		hc = &hChn[(chnNum & 0x7F) - 1];
+		if (chnNum & 0x80)
+			hc->NotePackMask = *p++;
 
-		if (hc->Msk & 1)
-			hc->Nte = *p++;
+		if (hc->NotePackMask & 1)
+			hc->RawNote = *p++;
 
-		if (hc->Msk & 2)
+		if (hc->NotePackMask & 2)
 			hc->Ins = *p++;
 
-		if (hc->Msk & 4)
+		if (hc->NotePackMask & 4)
 			hc->Vol = *p++;
 
-		if (hc->Msk & 8)
+		if (hc->NotePackMask & 8)
 		{
-			hc->Cmd = hc->OCm = *p++;
-			hc->CmdVal = hc->OCmVal = *p++;
+			hc->Cmd = hc->OldCmd = *p++;
+			hc->CmdVal = hc->OldCmdVal = *p++;
 		}
-		else if (hc->Msk & 128)
+		else if (hc->NotePackMask & 128)
 		{
-			hc->Cmd = hc->OCm;
-			hc->CmdVal = hc->OCmVal;
+			hc->Cmd = hc->OldCmd;
+			hc->CmdVal = hc->OldCmdVal;
 		}
 		else
 		{
@@ -1570,13 +1569,13 @@ static void UpdateData(void)
 			hostChn_t *hc = hChn;
 			for (int32_t i = 0; i < MAX_HOST_CHANNELS; i++, hc++)
 			{
-				if (!(hc->Flags & HF_ROW_UPDATED) || !(hc->Msk & 0x88))
+				if (!(hc->Flags & HF_ROW_UPDATED) || !(hc->NotePackMask & 0x88))
 					continue;
 
-				uint8_t OldMsk = hc->Msk;
-				hc->Msk &= 0x88;
+				uint8_t OldNotePackMask = hc->NotePackMask;
+				hc->NotePackMask &= 0x88;
 				InitCommandTable[hc->Cmd & 31](hc);
-				hc->Msk = OldMsk;
+				hc->NotePackMask = OldNotePackMask;
 			}
 		}
 	}
@@ -1588,7 +1587,7 @@ static void UpdateData(void)
 		for (int32_t i = 0; i < MAX_HOST_CHANNELS; i++, hc++)
 		{
 			if ((hc->Flags & HF_CHAN_ON) && (hc->Flags & HF_UPDATE_VOLEFX_IF_CHAN_ON))
-				VolumeEffectTable[hc->VCm & 7](hc);
+				VolumeEffectTable[hc->VolCmd & 7](hc);
 
 			if ((hc->Flags & (HF_UPDATE_EFX_IF_CHAN_ON | HF_ALWAYS_UPDATE_EFX)) &&
 				((hc->Flags & HF_ALWAYS_UPDATE_EFX) || (hc->Flags & HF_CHAN_ON)))
@@ -1601,35 +1600,35 @@ static void UpdateData(void)
 
 static void UpdateVibrato(slaveChn_t *sc) // 8bb: auto-vibrato
 {
-	assert(sc->SmpOffs != NULL);
-	sample_t *smp = sc->SmpOffs;
+	assert(sc->SmpPtr != NULL);
+	sample_t *smp = sc->SmpPtr;
 
-	if (smp->ViD == 0)
+	if (smp->AutoVibratoDepth == 0)
 		return;
 
-	sc->ViDepth += smp->ViR;
-	if (sc->ViDepth>>8 > smp->ViD)
-		sc->ViDepth = (smp->ViD << 8) | (sc->ViDepth & 0xFF);
+	sc->AutoVibratoDepth += smp->AutoVibratoRate;
+	if (sc->AutoVibratoDepth>>8 > smp->AutoVibratoDepth)
+		sc->AutoVibratoDepth = (smp->AutoVibratoDepth << 8) | (sc->AutoVibratoDepth & 0xFF);
 
-	if (smp->ViS == 0)
+	if (smp->AutoVibratoSpeed == 0)
 		return;
 
-	int16_t VibData;
-	if (smp->ViT == 3)
+	int16_t VibraoData;
+	if (smp->AutoVibratoWaveform == 3)
 	{
-		VibData = (Random() & 127) - 64;
+		VibraoData = (Random() & 127) - 64;
 	}
 	else
 	{
-		sc->ViP += smp->ViS; // Update pointer.
+		sc->AutoVibratoPos += smp->AutoVibratoSpeed; // Update pointer.
 
-		assert(smp->ViT < 3);
-		VibData = FineSineData[(smp->ViT << 8) + sc->ViP];
+		assert(smp->AutoVibratoWaveform < 3);
+		VibraoData = FineSineData[(smp->AutoVibratoWaveform << 8) + sc->AutoVibratoPos];
 	}
 
-	VibData = (VibData * (int16_t)(sc->ViDepth >> 8)) >> 6;
-	if (VibData != 0)
-		PitchSlideUpLinear(sc->HCOffst, sc, VibData);
+	VibraoData = (VibraoData * (int16_t)(sc->AutoVibratoDepth >> 8)) >> 6;
+	if (VibraoData != 0)
+		PitchSlideUpLinear(sc->HostChnPtr, sc, VibraoData);
 }
 
 static bool UpdateEnvelope(env_t *env, envState_t *envState, bool SustainReleased)
@@ -1647,8 +1646,8 @@ static bool UpdateEnvelope(env_t *env, envState_t *envState, bool SustainRelease
 
 	if (env->Flags & 6) // 8bb: any loop at all?
 	{
-		uint8_t LoopBeg = env->LpB;
-		uint8_t LoopEnd = env->LpE;
+		uint8_t LoopBeg = env->LoopBeg;
+		uint8_t LoopEnd = env->LoopEnd;
 
 		bool HasLoop = !!(env->Flags & ENVF_LOOP);
 		bool HasSusLoop = !!(env->Flags & ENVF_SUSLOOP);
@@ -1658,8 +1657,8 @@ static bool UpdateEnvelope(env_t *env, envState_t *envState, bool SustainRelease
 		{
 			if (!SustainReleased)
 			{
-				LoopBeg = env->SLB;
-				LoopEnd = env->SLE;
+				LoopBeg = env->SusLoopBeg;
+				LoopEnd = env->SusLoopEnd;
 			}
 			else if (!HasLoop)
 			{
@@ -1705,25 +1704,25 @@ static void UpdateInstruments(void)
 		if (sc->Ins != 0xFF) // 8bb: got an instrument?
 		{
 			int16_t EnvVal;
-			instrument_t *ins = sc->InsOffs;
+			instrument_t *ins = sc->InsPtr;
 			bool SustainReleased = !!(sc->Flags & SF_NOTE_OFF);
 
 			// 8bb: handle pitch/filter envelope
 
 			if (sc->Flags & SF_PITCHENV_ON)
 			{
-				if (UpdateEnvelope(&ins->PtEnvelope, &sc->PtEnvState, SustainReleased)) // 8bb: last node reached?
+				if (UpdateEnvelope(&ins->PitchEnv, &sc->PtEnvState, SustainReleased)) // 8bb: last node reached?
 					sc->Flags &= ~SF_PITCHENV_ON;
 			}
 
-			if (!(ins->PtEnvelope.Flags & ENVF_TYPE_FILTER)) // 8bb: pitch envelope
+			if (!(ins->PitchEnv.Flags & ENVF_TYPE_FILTER)) // 8bb: pitch envelope
 			{
 				EnvVal = (int16_t)((uint32_t)sc->PtEnvState.Value >> 8);
 				EnvVal >>= 3; // 8bb: arithmetic shift
 
 				if (EnvVal != 0)
 				{
-					PitchSlideUpLinear(sc->HCOffst, sc, EnvVal);
+					PitchSlideUpLinear(sc->HostChnPtr, sc, EnvVal);
 					sc->Flags |= SF_FREQ_CHANGE;
 				}
 			}
@@ -1751,14 +1750,14 @@ static void UpdateInstruments(void)
 				if (EnvVal & 0xFF00)
 					EnvVal--;
 
-				sc->MBank = (sc->MBank & 0xFF00) | (uint8_t)EnvVal; // 8bb: don't mess with upper byte!
+				sc->MIDIBank = (sc->MIDIBank & 0xFF00) | (uint8_t)EnvVal; // 8bb: don't mess with upper byte!
 				sc->Flags |= SF_RECALC_FINALVOL;
 			}
 
 			if (sc->Flags & SF_PANENV_ON)
 			{
 				sc->Flags |= SF_RECALC_PAN;
-				if (UpdateEnvelope(&ins->PEnvelope, &sc->PEnvState, SustainReleased)) // 8bb: last node reached?
+				if (UpdateEnvelope(&ins->PanEnv, &sc->PEnvState, SustainReleased)) // 8bb: last node reached?
 					sc->Flags &= ~SF_PANENV_ON;
 			}
 
@@ -1769,7 +1768,7 @@ static void UpdateInstruments(void)
 			{
 				sc->Flags |= SF_RECALC_VOL;
 
-				if (UpdateEnvelope(&ins->VEnvelope, &sc->VEnvState, SustainReleased)) // 8bb: last node reached?
+				if (UpdateEnvelope(&ins->VolEnv, &sc->VEnvState, SustainReleased)) // 8bb: last node reached?
 				{
 					// Envelope turned off...
 
@@ -1790,7 +1789,7 @@ static void UpdateInstruments(void)
 					if (!(sc->Flags & SF_FADEOUT)) // Note fade on?
 					{
 						// Now, check if loop + sustain off
-						if (SustainReleased && (ins->VEnvelope.Flags & ENVF_LOOP)) // Normal vol env loop?
+						if (SustainReleased && (ins->VolEnv.Flags & ENVF_LOOP)) // Normal vol env loop?
 						{
 							sc->Flags |= SF_FADEOUT;
 							HandleNoteFade = true;
@@ -1826,10 +1825,10 @@ static void UpdateInstruments(void)
 
 			if (TurnOffCh)
 			{
-				if (!(sc->HCN & CHN_DISOWNED))
+				if (!(sc->HostChnNum & CHN_DISOWNED))
 				{
-					sc->HCN |= CHN_DISOWNED; // Host channel exists
-					((hostChn_t *)sc->HCOffst)->Flags &= ~HF_CHAN_ON;
+					sc->HostChnNum |= CHN_DISOWNED; // Host channel exists
+					((hostChn_t *)sc->HostChnPtr)->Flags &= ~HF_CHAN_ON;
 				}
 
 				sc->Flags |= (SF_RECALC_VOL | SF_NOTE_STOP);
@@ -1841,13 +1840,13 @@ static void UpdateInstruments(void)
 			sc->Flags &= ~SF_RECALC_VOL;
 			sc->Flags |= SF_RECALC_FINALVOL;
 
-			uint16_t volume = (sc->Vol * sc->CVl * sc->FadeOut) >> 7;
-			volume = (volume * sc->SVl) >> 7;
+			uint16_t volume = (sc->Vol * sc->ChnVol * sc->FadeOut) >> 7;
+			volume = (volume * sc->SmpVol) >> 7;
 			volume = (volume * (uint16_t)((uint32_t)sc->VEnvState.Value >> 8)) >> 14;
 			volume = (volume * Song.GlobalVolume) >> 7;
 			assert(volume <= 32768);
 
-			sc->FV = volume >> 8;
+			sc->FinalVol = volume >> 8;
 			sc->vol16Bit = volume;
 		}
 
@@ -1858,7 +1857,7 @@ static void UpdateInstruments(void)
 
 			if (sc->Pan == PAN_SURROUND)
 			{
-				sc->FPP = sc->FP = sc->Pan;
+				sc->FinalPlayPan = sc->FinalPan = sc->Pan;
 			}
 			else
 			{
@@ -1875,8 +1874,8 @@ static void UpdateInstruments(void)
 				PanVal = sc->Pan + ((PanVal * PanEnvVal) >> 5);
 				PanVal -= 32;
 
-				sc->FPP = (int8_t)(((PanVal * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32);
-				assert(sc->FPP <= 64);
+				sc->FinalPlayPan = (int8_t)(((PanVal * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32);
+				assert(sc->FinalPlayPan <= 64);
 			}
 		}
 
@@ -1897,10 +1896,10 @@ static void UpdateSamples(void)
 			sc->Flags &= ~SF_RECALC_VOL;
 			sc->Flags |= SF_RECALC_FINALVOL;
 
-			uint16_t volume = (((sc->Vol * sc->CVl * sc->SVl) >> 4) * Song.GlobalVolume) >> 7;
+			uint16_t volume = (((sc->Vol * sc->ChnVol * sc->SmpVol) >> 4) * Song.GlobalVolume) >> 7;
 			assert(volume <= 32768);
 
-			sc->FV = volume >> 8;
+			sc->FinalVol = volume >> 8;
 			sc->vol16Bit = volume;
 		}
 
@@ -1909,16 +1908,16 @@ static void UpdateSamples(void)
 			sc->Flags &= ~SF_RECALC_PAN;
 			sc->Flags |= SF_PAN_CHANGED;
 
-			sc->FP = sc->Pan;
+			sc->FinalPan = sc->Pan;
 
 			if (sc->Pan == PAN_SURROUND)
 			{
-				sc->FPP = sc->Pan;
+				sc->FinalPlayPan = sc->Pan;
 			}
 			else
 			{
-				sc->FPP = ((((int8_t)sc->Pan - 32) * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32;
-				assert(sc->FPP <= 64);
+				sc->FinalPlayPan = ((((int8_t)sc->Pan - 32) * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32;
+				assert(sc->FinalPlayPan <= 64);
 			}
 		}
 
@@ -1934,9 +1933,9 @@ void Update(void)
 		if (!(sc->Flags & SF_CHAN_ON))
 			continue;
 
-		if (sc->Vol != sc->VS)
+		if (sc->Vol != sc->VolSet)
 		{
-			sc->Vol = sc->VS;
+			sc->Vol = sc->VolSet;
 			sc->Flags |= SF_RECALC_VOL;
 		}
 
@@ -2057,11 +2056,11 @@ void Music_Stop(void)
 	hostChn_t *hc = hChn;
 	for (uint8_t i = 0; i < MAX_HOST_CHANNELS; i++, hc++)
 	{
-		hc->HCN = i;
+		hc->HostChnNum = i;
 		
 		// 8bb: set initial channel pan and channel vol
-		hc->CP = Song.Header.ChnlPan[i] & 0x7F;
-		hc->CV = Song.Header.ChnlVol[i];
+		hc->ChnPan = Song.Header.ChnlPan[i] & 0x7F;
+		hc->ChnVol = Song.Header.ChnlVol[i];
 	}
 	
 	slaveChn_t *sc = sChn;
@@ -2088,10 +2087,8 @@ void Music_StopChannels(void)
 	for (int32_t i = 0; i < MAX_HOST_CHANNELS; i++, hc++)
 	{
 		hc->Flags = 0;
-
-		// 8bb: reset pattern loop state
-		hc->PLR = 0;
-		hc->PLC = 0;
+		hc->PattLoopStartRow = 0;
+		hc->PattLoopCount = 0;
 	}
 
 	slaveChn_t *sc = sChn;
@@ -2207,13 +2204,13 @@ void Music_ReleaseSample(uint32_t sample)
 bool Music_AllocatePattern(uint32_t pattern, uint32_t length)
 {
 	assert(pattern < MAX_PATTERNS);
-	pattern_t *pat = &Song.Pat[pattern];
+	pattern_t *p = &Song.Patt[pattern];
 
-	if (pat->PackedData != NULL)
+	if (p->PackedData != NULL)
 		return true;
 
-	pat->PackedData = (uint8_t *)malloc(length);
-	if (pat->PackedData == NULL)
+	p->PackedData = (uint8_t *)malloc(length);
+	if (p->PackedData == NULL)
 		return false;
 
 	return true;
@@ -2265,13 +2262,13 @@ void Music_ReleasePattern(uint32_t pattern)
 	lockMixer();
 	
 	assert(pattern < MAX_PATTERNS);
-	pattern_t *pat = &Song.Pat[pattern];
+	pattern_t *p = &Song.Patt[pattern];
 
-	if (pat->PackedData != NULL)
-		free(pat->PackedData);
+	if (p->PackedData != NULL)
+		free(p->PackedData);
 
-	pat->Rows = 0;
-	pat->PackedData = NULL;
+	p->Rows = 0;
+	p->PackedData = NULL;
 	
 	unlockMixer();
 }
