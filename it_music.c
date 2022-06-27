@@ -1613,22 +1613,22 @@ static void UpdateVibrato(slaveChn_t *sc) // 8bb: auto-vibrato
 	if (smp->AutoVibratoSpeed == 0)
 		return;
 
-	int16_t VibraoData;
+	int16_t VibratoData;
 	if (smp->AutoVibratoWaveform == 3)
 	{
-		VibraoData = (Random() & 127) - 64;
+		VibratoData = (Random() & 127) - 64;
 	}
 	else
 	{
 		sc->AutoVibratoPos += smp->AutoVibratoSpeed; // Update pointer.
 
 		assert(smp->AutoVibratoWaveform < 3);
-		VibraoData = FineSineData[(smp->AutoVibratoWaveform << 8) + sc->AutoVibratoPos];
+		VibratoData = FineSineData[(smp->AutoVibratoWaveform << 8) + sc->AutoVibratoPos];
 	}
 
-	VibraoData = (VibraoData * (int16_t)(sc->AutoVibratoDepth >> 8)) >> 6;
-	if (VibraoData != 0)
-		PitchSlideUpLinear(sc->HostChnPtr, sc, VibraoData);
+	VibratoData = (VibratoData * (int16_t)(sc->AutoVibratoDepth >> 8)) >> 6;
+	if (VibratoData != 0)
+		PitchSlideUpLinear(sc->HostChnPtr, sc, VibratoData);
 }
 
 static bool UpdateEnvelope(env_t *env, envState_t *envState, bool SustainReleased)
