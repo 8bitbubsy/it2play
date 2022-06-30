@@ -191,12 +191,8 @@ typedef struct slaveChn_t
 	uint32_t Frac32;
 	uint16_t vol16Bit;
 	int32_t SamplingPosition;
-	envState_t VEnvState;
-	int32_t filtera;
-	envState_t PEnvState;
-	int32_t filterb;
-	envState_t PtEnvState;
-	int32_t filterc;
+	int32_t filtera, filterb, filterc;
+	envState_t VolEnvState, PanEnvState, PitchEnvState;
 
 	// 8bb: added these
 	uint32_t Delta32;

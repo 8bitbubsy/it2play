@@ -489,17 +489,17 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 	sc->Pan = sc->PanSet = pan;
 
 	// Envelope init
-	sc->VEnvState.Value = 64 << 16; // 8bb: clears fractional part
-	sc->VEnvState.Tick = sc->VEnvState.NextTick = 0;
-	sc->VEnvState.CurNode = 0;
+	sc->VolEnvState.Value = 64 << 16; // 8bb: clears fractional part
+	sc->VolEnvState.Tick = sc->VolEnvState.NextTick = 0;
+	sc->VolEnvState.CurNode = 0;
 
-	sc->PEnvState.Value = 0; // 8bb: clears fractional part
-	sc->PEnvState.Tick = sc->PEnvState.NextTick = 0;
-	sc->PEnvState.CurNode = 0;
+	sc->PanEnvState.Value = 0; // 8bb: clears fractional part
+	sc->PanEnvState.Tick = sc->PanEnvState.NextTick = 0;
+	sc->PanEnvState.CurNode = 0;
 
-	sc->PtEnvState.Value = 0; // 8bb: clears fractional part
-	sc->PtEnvState.Tick = sc->PtEnvState.NextTick = 0;
-	sc->PtEnvState.CurNode = 0;
+	sc->PitchEnvState.Value = 0; // 8bb: clears fractional part
+	sc->PitchEnvState.Tick = sc->PitchEnvState.NextTick = 0;
+	sc->PitchEnvState.CurNode = 0;
 
 	sc->Flags = SF_CHAN_ON + SF_RECALC_PAN + SF_RECALC_VOL + SF_FREQ_CHANGE + SF_NEW_NOTE;
 
@@ -513,29 +513,29 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 
 		if ((ins->VolEnv.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer volume data
 		{
-			sc->VEnvState.Value = lastSC->VEnvState.Value;
-			sc->VEnvState.Delta = lastSC->VEnvState.Delta;
-			sc->VEnvState.Tick = lastSC->VEnvState.Tick;
-			sc->VEnvState.CurNode = lastSC->VEnvState.CurNode;
-			sc->VEnvState.NextTick = lastSC->VEnvState.NextTick;
+			sc->VolEnvState.Value = lastSC->VolEnvState.Value;
+			sc->VolEnvState.Delta = lastSC->VolEnvState.Delta;
+			sc->VolEnvState.Tick = lastSC->VolEnvState.Tick;
+			sc->VolEnvState.CurNode = lastSC->VolEnvState.CurNode;
+			sc->VolEnvState.NextTick = lastSC->VolEnvState.NextTick;
 		}
 
 		if ((ins->PanEnv.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer pan data
 		{
-			sc->PEnvState.Value = lastSC->PEnvState.Value;
-			sc->PEnvState.Delta = lastSC->PEnvState.Delta;
-			sc->PEnvState.Tick = lastSC->PEnvState.Tick;
-			sc->PEnvState.CurNode = lastSC->PEnvState.CurNode;
-			sc->PEnvState.NextTick = lastSC->PEnvState.NextTick;
+			sc->PanEnvState.Value = lastSC->PanEnvState.Value;
+			sc->PanEnvState.Delta = lastSC->PanEnvState.Delta;
+			sc->PanEnvState.Tick = lastSC->PanEnvState.Tick;
+			sc->PanEnvState.CurNode = lastSC->PanEnvState.CurNode;
+			sc->PanEnvState.NextTick = lastSC->PanEnvState.NextTick;
 		}
 
 		if ((ins->PitchEnv.Flags & (ENVF_ENABLED|ENVF_CARRY)) == ENVF_ENABLED+ENVF_CARRY) // Transfer pitch data
 		{
-			sc->PtEnvState.Value = lastSC->PtEnvState.Value;
-			sc->PtEnvState.Delta = lastSC->PtEnvState.Delta;
-			sc->PtEnvState.Tick = lastSC->PtEnvState.Tick;
-			sc->PtEnvState.CurNode = lastSC->PtEnvState.CurNode;
-			sc->PtEnvState.NextTick = lastSC->PtEnvState.NextTick;
+			sc->PitchEnvState.Value = lastSC->PitchEnvState.Value;
+			sc->PitchEnvState.Delta = lastSC->PitchEnvState.Delta;
+			sc->PitchEnvState.Tick = lastSC->PitchEnvState.Tick;
+			sc->PitchEnvState.CurNode = lastSC->PitchEnvState.CurNode;
+			sc->PitchEnvState.NextTick = lastSC->PitchEnvState.NextTick;
 		}
 	}
 
@@ -581,7 +581,7 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 	sc->ChnVol = hc->ChnVol;
 	sc->Pan = sc->PanSet = hc->ChnPan;
 	sc->FadeOut = 1024;
-	sc->VEnvState.Value = (64 << 16) | (sc->VEnvState.Value & 0xFFFF); // 8bb: keeps frac
+	sc->VolEnvState.Value = (64 << 16) | (sc->VolEnvState.Value & 0xFFFF); // 8bb: keeps frac
 	sc->MIDIBank = 0x00FF; // Filter cutoff
 	sc->Note = hc->RawNote;
 	sc->Ins = hc->Ins;
@@ -595,8 +595,8 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 
 		sc->SmpBitDepth = 0; // 8bb: 8-bit
 		sc->AutoVibratoDepth = sc->AutoVibratoPos = 0;
-		sc->PEnvState.Value &= 0xFFFF; // No pan deviation (8bb: keeps frac)
-		sc->PtEnvState.Value &= 0xFFFF; // No pitch deviation (8bb: keeps frac)
+		sc->PanEnvState.Value &= 0xFFFF; // No pan deviation (8bb: keeps frac)
+		sc->PitchEnvState.Value &= 0xFFFF; // No pitch deviation (8bb: keeps frac)
 		sc->LoopDirection = DIR_FORWARDS; // Reset loop dirn
 
 		if (s->Length == 0 || !(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
@@ -1711,13 +1711,13 @@ static void UpdateInstruments(void)
 
 			if (sc->Flags & SF_PITCHENV_ON)
 			{
-				if (UpdateEnvelope(&ins->PitchEnv, &sc->PtEnvState, SustainReleased)) // 8bb: last node reached?
+				if (UpdateEnvelope(&ins->PitchEnv, &sc->PitchEnvState, SustainReleased)) // 8bb: last node reached?
 					sc->Flags &= ~SF_PITCHENV_ON;
 			}
 
 			if (!(ins->PitchEnv.Flags & ENVF_TYPE_FILTER)) // 8bb: pitch envelope
 			{
-				EnvVal = (int16_t)((uint32_t)sc->PtEnvState.Value >> 8);
+				EnvVal = (int16_t)((uint32_t)sc->PitchEnvState.Value >> 8);
 				EnvVal >>= 3; // 8bb: arithmetic shift
 
 				if (EnvVal != 0)
@@ -1728,7 +1728,7 @@ static void UpdateInstruments(void)
 			}
 			else if (sc->Smp != 100) // 8bb: filter envelope
 			{
-				EnvVal = (int16_t)((uint32_t)sc->PtEnvState.Value >> 8);
+				EnvVal = (int16_t)((uint32_t)sc->PitchEnvState.Value >> 8);
 				EnvVal >>= 6; // 8bb: arithmetic shift, -128..128 (though -512..511 is in theory possible)
 
 				/*
@@ -1757,7 +1757,7 @@ static void UpdateInstruments(void)
 			if (sc->Flags & SF_PANENV_ON)
 			{
 				sc->Flags |= SF_RECALC_PAN;
-				if (UpdateEnvelope(&ins->PanEnv, &sc->PEnvState, SustainReleased)) // 8bb: last node reached?
+				if (UpdateEnvelope(&ins->PanEnv, &sc->PanEnvState, SustainReleased)) // 8bb: last node reached?
 					sc->Flags &= ~SF_PANENV_ON;
 			}
 
@@ -1768,13 +1768,13 @@ static void UpdateInstruments(void)
 			{
 				sc->Flags |= SF_RECALC_VOL;
 
-				if (UpdateEnvelope(&ins->VolEnv, &sc->VEnvState, SustainReleased)) // 8bb: last node reached?
+				if (UpdateEnvelope(&ins->VolEnv, &sc->VolEnvState, SustainReleased)) // 8bb: last node reached?
 				{
 					// Envelope turned off...
 
 					sc->Flags &= ~SF_VOLENV_ON;
 
-					if ((sc->VEnvState.Value & 0x00FF0000) == 0) // Turn off if end of loop is reached (8bb: last env. point is zero?)
+					if ((sc->VolEnvState.Value & 0x00FF0000) == 0) // Turn off if end of loop is reached (8bb: last env. point is zero?)
 					{
 						TurnOffCh = true;
 					}
@@ -1842,7 +1842,7 @@ static void UpdateInstruments(void)
 
 			uint16_t volume = (sc->Vol * sc->ChnVol * sc->FadeOut) >> 7;
 			volume = (volume * sc->SmpVol) >> 7;
-			volume = (volume * (uint16_t)((uint32_t)sc->VEnvState.Value >> 8)) >> 14;
+			volume = (volume * (uint16_t)((uint32_t)sc->VolEnvState.Value >> 8)) >> 14;
 			volume = (volume * Song.GlobalVolume) >> 7;
 			assert(volume <= 32768);
 
@@ -1870,7 +1870,7 @@ static void UpdateInstruments(void)
 				PanVal = -PanVal;
 				PanVal += 32;
 
-				const int8_t PanEnvVal = (int8_t)(sc->PEnvState.Value >> 16);
+				const int8_t PanEnvVal = (int8_t)(sc->PanEnvState.Value >> 16);
 				PanVal = sc->Pan + ((PanVal * PanEnvVal) >> 5);
 				PanVal -= 32;
 

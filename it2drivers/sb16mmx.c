@@ -106,7 +106,7 @@ static void SB16MMX_MixSamples(void)
 						const uint8_t filterCutOff = Driver.FilterParameters[sc->HostChnNum];
 						const uint8_t filterQ = Driver.FilterParameters[64+sc->HostChnNum];
 
-						sc->VEnvState.CurNode = (filterCutOff << 8) | (sc->VEnvState.CurNode & 0x00FF);
+						sc->VolEnvState.CurNode = (filterCutOff << 8) | (sc->VolEnvState.CurNode & 0x00FF);
 						sc->MIDIBank = (filterQ << 8) | (sc->MIDIBank & 0x00FF);
 					}
 				}
@@ -126,15 +126,15 @@ static void SB16MMX_MixSamples(void)
 							FilterQ = Driver.FilterParameters[64+sc->HostChnNum];
 
 							// If the values are different, then force recalculate volume. (and hence mixmode)
-							if (filterCutOff != (uint16_t)sc->VEnvState.CurNode>>8 && FilterQ != sc->MIDIBank>>8)
+							if (filterCutOff != (uint16_t)sc->VolEnvState.CurNode>>8 && FilterQ != sc->MIDIBank>>8)
 								sc->LeftVolume = sc->RightVolume = 0;
 
-							sc->VEnvState.CurNode = (filterCutOff << 8) | (sc->VEnvState.CurNode & 0x00FF);
+							sc->VolEnvState.CurNode = (filterCutOff << 8) | (sc->VolEnvState.CurNode & 0x00FF);
 							sc->MIDIBank = (FilterQ << 8) | (sc->MIDIBank & 0x00FF);
 						}
 
 						// 8bb: FilterEnvVal (0..255) * CutOff (0..127)
-						const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VEnvState.CurNode >> 8);
+						const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VolEnvState.CurNode >> 8);
 						if (FilterFreqValue != 127*255 || FilterQ != 0)
 						{
 							assert(FilterFreqValue <= 127*255 && FilterQ <= 127);

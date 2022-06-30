@@ -143,12 +143,12 @@ static void HQ_MixSamples(void)
 				uint8_t filterCutOff = Driver.FilterParameters[sc->HostChnNum];
 				FilterQ = Driver.FilterParameters[64+sc->HostChnNum];
 
-				sc->VEnvState.CurNode = (filterCutOff << 8) | (sc->VEnvState.CurNode & 0x00FF);
+				sc->VolEnvState.CurNode = (filterCutOff << 8) | (sc->VolEnvState.CurNode & 0x00FF);
 				sc->MIDIBank = (FilterQ << 8) | (sc->MIDIBank & 0x00FF);
 			}
 
 			// FilterEnvVal (0..255) * CutOff (0..127)
-			const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VEnvState.CurNode >> 8);
+			const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VolEnvState.CurNode >> 8);
 			if (FilterFreqValue != 127*255 || FilterQ != 0)
 			{
 				assert(FilterFreqValue <= 127*255 && FilterQ <= 127);
