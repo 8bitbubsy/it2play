@@ -14,7 +14,7 @@ enum // 8bb: envelope flags
 {
 	ENVF_ENABLED = 1,
 	ENVF_LOOP = 2,
-	ENVF_SUSLOOP = 4,
+	ENVF_SUSTAINLOOP = 4,
 	ENVF_CARRY = 8,
 	ENVF_TYPE_FILTER = 128 // 8bb: for pitch envelope only
 };
@@ -26,9 +26,9 @@ enum // 8bb: sample flags
 	SMPF_STEREO = 4,
 	SMPF_COMPRESSED = 8,
 	SMPF_USE_LOOP = 16,
-	SMPF_USE_SUSLOOP = 32,
+	SMPF_USE_SUSTAINLOOP = 32,
 	SMPF_LOOP_PINGPONG = 64,
-	SMPF_SUSLOOP_PINGPONG = 128
+	SMPF_SUSTAINLOOP_PINGPONG = 128
 };
 
 enum // 8bb: host channel flags
@@ -109,7 +109,7 @@ typedef struct envNode_t
 
 typedef struct env_t
 {
-	uint8_t Flags, Num, LoopBeg, LoopEnd, SusLoopBeg, SusLoopEnd;
+	uint8_t Flags, Num, LoopBegin, LoopEnd, SustainLoopBegin, SustainLoopEnd;
 	envNode_t NodePoints[25];
 } env_t;
 
@@ -132,7 +132,7 @@ typedef struct smp_t
 	uint8_t GlobVol, Flags, Vol;
 	char SampleName[26];
 	uint8_t Cvt, DefPan;
-	uint32_t Length, LoopBeg, LoopEnd, C5Speed, SusLoopBeg, SusLoopEnd, OffsetInFile;
+	uint32_t Length, LoopBegin, LoopEnd, C5Speed, SustainLoopBegin, SustainLoopEnd, OffsetInFile;
 	uint8_t AutoVibratoSpeed, AutoVibratoDepth, AutoVibratoRate, AutoVibratoWaveform;
 	void *Data;
 
@@ -177,7 +177,7 @@ typedef struct slaveChn_t
 	uint8_t SmpBitDepth, AutoVibratoPos;
 	uint16_t AutoVibratoDepth;
 	int32_t OldLeftVolume, OldRightVolume;
-	uint8_t FinalVol, Vol, VolSet, ChnVol, SmpVol, FinalPan, FinalPlayPan;
+	uint8_t FinalVol7Bit, Vol, VolSet, ChnVol, SmpVol, FinalPan;
 	uint16_t FadeOut;
 	uint8_t DCT, DCA, Pan, PanSet;
 	instrument_t *InsPtr;
@@ -187,9 +187,9 @@ typedef struct slaveChn_t
 	void *HostChnPtr;
 	uint8_t HostChnNum, NNA, MIDIChn, MIDIProg;
 	uint16_t MIDIBank;
-	int32_t LoopBeg, LoopEnd;
+	int32_t LoopBegin, LoopEnd;
 	uint32_t Frac32;
-	uint16_t vol16Bit;
+	uint16_t FinalVol15Bit;
 	int32_t SamplingPosition;
 	int32_t filtera, filterb, filterc;
 	envState_t VolEnvState, PanEnvState, PitchEnvState;

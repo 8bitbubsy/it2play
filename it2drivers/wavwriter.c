@@ -65,7 +65,7 @@ static void WAVWriter_MixSamples(void)
 		{
 			sc->Flags &= ~SF_CHAN_ON; // Turn off channel
 
-			sc->vol16Bit = 0;
+			sc->FinalVol15Bit = 0;
 			sc->Flags |= SF_RECALC_FINALVOL;
 		}
 
@@ -156,16 +156,16 @@ static void WAVWriter_MixSamples(void)
 			}
 			else if (!(Song.Header.Flags & ITF_STEREO)) // 8bb: mono?
 			{
-				sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 8; // 8bb: 0..16384
+				sc->LeftVolume = sc->RightVolume = (sc->FinalVol15Bit * MixVolume) >> 8; // 8bb: 0..16384
 			}
-			else if (sc->FinalPlayPan == PAN_SURROUND)
+			else if (sc->FinalPan == PAN_SURROUND)
 			{
-				sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 9; // 8bb: 0..8192
+				sc->LeftVolume = sc->RightVolume = (sc->FinalVol15Bit * MixVolume) >> 9; // 8bb: 0..8192
 			}
 			else // 8bb: normal (panned)
 			{
-				sc->LeftVolume  = ((64-sc->FinalPlayPan) * MixVolume * sc->vol16Bit) >> 14; // 8bb: 0..16384
-				sc->RightVolume = (    sc->FinalPlayPan  * MixVolume * sc->vol16Bit) >> 14;
+				sc->LeftVolume  = ((64-sc->FinalPan) * MixVolume * sc->FinalVol15Bit) >> 14; // 8bb: 0..16384
+				sc->RightVolume = (    sc->FinalPan  * MixVolume * sc->FinalVol15Bit) >> 14;
 			}
 		}
 
@@ -189,7 +189,7 @@ static void WAVWriter_MixSamples(void)
 		{
 			// 8bb: use position update routine (zero volume)
 
-			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // 8bb: also length for non-loopers
+			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin; // 8bb: also length for non-loopers
 			if ((int32_t)LoopLength > 0)
 			{
 				if (sc->LoopMode == LOOP_PINGPONG)
@@ -202,7 +202,7 @@ static void WAVWriter_MixSamples(void)
 		}
 		else // 8bb: regular mixing
 		{
-			const bool Surround = (sc->FinalPlayPan == PAN_SURROUND);
+			const bool Surround = (sc->FinalPan == PAN_SURROUND);
 			const bool Sample16Bit = !!(sc->SmpBitDepth & SMPF_16BIT);
 			mixFunc Mix = WAVWriter_MixFunctionTables[(Surround << 1) + Sample16Bit];
 			assert(Mix != NULL);
@@ -243,7 +243,7 @@ static void WAVWriter_MixSamples(void)
 			** it's completely unneeded.
 			*/
 
-			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // 8bb: also length for non-loopers
+			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin; // 8bb: also length for non-loopers
 			if ((int32_t)LoopLength > 0)
 			{
 				int32_t *MixBufferPtr = MixBuffer;
@@ -256,7 +256,7 @@ static void WAVWriter_MixSamples(void)
 						uint32_t SamplesToMix;
 						if (sc->LoopDirection == DIR_BACKWARDS)
 						{
-							SamplesToMix = sc->SamplingPosition - (sc->LoopBeg + 1);
+							SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
 #if CPU_32BIT
 							if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 								SamplesToMix = UINT16_MAX;
@@ -285,9 +285,9 @@ static void WAVWriter_MixSamples(void)
 
 						if (sc->LoopDirection == DIR_BACKWARDS)
 						{
-							if (sc->SamplingPosition <= sc->LoopBeg)
+							if (sc->SamplingPosition <= sc->LoopBegin)
 							{
-								NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SamplingPosition) % (LoopLength << 1);
+								NewLoopPos = (uint32_t)(sc->LoopBegin - sc->SamplingPosition) % (LoopLength << 1);
 								if (NewLoopPos >= LoopLength)
 								{
 									sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
@@ -295,7 +295,7 @@ static void WAVWriter_MixSamples(void)
 								else
 								{
 									sc->LoopDirection = DIR_FORWARDS;
-									sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
+									sc->SamplingPosition = sc->LoopBegin + NewLoopPos;
 									sc->Frac32 = (uint16_t)(0 - sc->Frac32);
 								}
 							}
@@ -307,7 +307,7 @@ static void WAVWriter_MixSamples(void)
 								NewLoopPos = (uint32_t)(sc->SamplingPosition - sc->LoopEnd) % (LoopLength << 1);
 								if (NewLoopPos >= LoopLength)
 								{
-									sc->SamplingPosition = sc->LoopBeg + (NewLoopPos - LoopLength);
+									sc->SamplingPosition = sc->LoopBegin + (NewLoopPos - LoopLength);
 								}
 								else
 								{
@@ -339,7 +339,7 @@ static void WAVWriter_MixSamples(void)
 						MixBufferPtr += SamplesToMix << 1;
 
 						if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
-							sc->SamplingPosition = sc->LoopBeg + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
+							sc->SamplingPosition = sc->LoopBegin + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 					}
 				}
 				else // 8bb: no loop
@@ -529,8 +529,8 @@ static void WAVWriter_FixSamples(void)
 				}
 				else
 				{
-					Data16[s->LoopEnd+0] = Data16[s->LoopBeg+0];
-					Data16[s->LoopEnd+1] = Data16[s->LoopBeg+1];
+					Data16[s->LoopEnd+0] = Data16[s->LoopBegin+0];
+					Data16[s->LoopEnd+1] = Data16[s->LoopBegin+1];
 				}
 			}
 			else
@@ -561,8 +561,8 @@ static void WAVWriter_FixSamples(void)
 				}
 				else
 				{
-					Data8[s->LoopEnd+0] = Data8[s->LoopBeg+0];
-					Data8[s->LoopEnd+1] = Data8[s->LoopBeg+1];
+					Data8[s->LoopEnd+0] = Data8[s->LoopBegin+0];
+					Data8[s->LoopEnd+1] = Data8[s->LoopBegin+1];
 				}
 			}
 			else

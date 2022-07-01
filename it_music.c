@@ -48,8 +48,8 @@ bool WAVRender_Flag = false;
 // ------------------------
 
 static bool FirstTimeInit = true;
-static uint8_t InterpretState, InterpretType; // 8bb: for MIDISendFilter()
-static uint16_t Seed1 = 0x1234, Seed2 = 0x5678;
+static uint8_t MIDIInterpretState, MIDIInterpretType; // 8bb: for MIDISendFilter()
+static uint16_t RandSeed1 = 0x1234, RandSeed2 = 0x5678;
 
 static char MIDIDataArea[(9+16+128)*32];
 
@@ -185,11 +185,11 @@ static void MIDISendFilter(hostChn_t *hc, slaveChn_t *sc, uint8_t Data)
 	**
 	** It will only interpret filter commands (set and clear).
 	*/
-	if (InterpretState < 2)
+	if (MIDIInterpretState < 2)
 	{
 		if (Data == 0xF0)
 		{
-			InterpretState++;
+			MIDIInterpretState++;
 		}
 		else
 		{
@@ -203,28 +203,28 @@ static void MIDISendFilter(hostChn_t *hc, slaveChn_t *sc, uint8_t Data)
 				}
 			}
 
-			InterpretState = 0;
+			MIDIInterpretState = 0;
 		}
 	}
-	else if (InterpretState == 2)
+	else if (MIDIInterpretState == 2)
 	{
 		if (Data < 2) // 8bb: must be 0..1 (Cutoff or Q)
 		{
-			InterpretType = Data;
-			InterpretState++;
+			MIDIInterpretType = Data;
+			MIDIInterpretState++;
 		}
 		else
 		{
-			InterpretState = 0;
+			MIDIInterpretState = 0;
 		}
 	}
-	else if (InterpretState == 3)
+	else if (MIDIInterpretState == 3)
 	{
 		// Have InterpretType, now get parameter, then return to normal.
 
 		if (Data <= 0x7F)
 		{
-			bool IsFilterQ = (InterpretType == 1);
+			bool IsFilterQ = (MIDIInterpretType == 1);
 			if (IsFilterQ)
 				Driver.FilterParameters[(64 + hc->HostChnNum) & 127] = Data;
 			else
@@ -234,7 +234,7 @@ static void MIDISendFilter(hostChn_t *hc, slaveChn_t *sc, uint8_t Data)
 				sc->Flags |= SF_RECALC_FINALVOL;
 		}
 
-		InterpretState = 0;
+		MIDIInterpretState = 0;
 	}
 }
 
@@ -404,7 +404,7 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 				}
 				else
 				{
-					uint16_t volume = sc->FinalVol;
+					uint16_t volume = sc->FinalVol7Bit;
 
 					if (volume == 0)
 						volume = 1;
@@ -903,10 +903,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			continue;
 
 		ChannelCountTable[sc->Smp]++;
-		if ((sc->HostChnNum & CHN_DISOWNED) && sc->FinalVol < ChannelVolumeTable[sc->Smp])
+		if ((sc->HostChnNum & CHN_DISOWNED) && sc->FinalVol7Bit < ChannelVolumeTable[sc->Smp])
 		{
 			ChannelLocationTable[sc->Smp] = sc;
-			ChannelVolumeTable[sc->Smp] = sc->FinalVol;
+			ChannelVolumeTable[sc->Smp] = sc->FinalVol7Bit;
 		}
 	}
 
@@ -962,10 +962,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			lowestVol = 255;
 			for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 			{
-				if ((scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol <= lowestVol)
+				if ((scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol7Bit <= lowestVol)
 				{
 					sc = scTmp;
-					lowestVol = scTmp->FinalVol;
+					lowestVol = scTmp->FinalVol7Bit;
 				}
 			}
 
@@ -987,7 +987,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		slaveChn_t *scTmp = AllocateSlaveOffset;
 		for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 		{
-			if (scTmp->HostChnNum != hostChnNum || scTmp->FinalVol >= lowestVol)
+			if (scTmp->HostChnNum != hostChnNum || scTmp->FinalVol7Bit >= lowestVol)
 				continue;
 
 			// Now check if any other channel contains this sample
@@ -995,7 +995,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			if (scTmp->Smp == targetSmp)
 			{
 				sc = scTmp;
-				lowestVol = scTmp->FinalVol;
+				lowestVol = scTmp->FinalVol7Bit;
 				continue;
 			}
 
@@ -1009,7 +1009,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 				{
 					// OK found a second sample.
 					sc = scTmp;
-					lowestVol = scTmp->FinalVol;
+					lowestVol = scTmp->FinalVol7Bit;
 					break;
 				}
 			}
@@ -1029,10 +1029,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 	slaveChn_t *scTmp = AllocateSlaveOffset;
 	for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 	{
-		if (scTmp->Smp == sc->Smp && (scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol < lowestVol)
+		if (scTmp->Smp == sc->Smp && (scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol7Bit < lowestVol)
 		{
 			sc = scTmp;
-			lowestVol = scTmp->FinalVol;
+			lowestVol = scTmp->FinalVol7Bit;
 		}
 	}
 
@@ -1043,8 +1043,8 @@ uint8_t Random(void) // 8bb: verified to be ported correctly
 {
 	uint16_t r1, r2, r3, r4;
 	
-	r1 = Seed1;
-	r2 = r3 = r4 = Seed2;
+	r1 = RandSeed1;
+	r2 = r3 = r4 = RandSeed2;
 
 	r1 += r2;
 	r1 = (r1 << (r3 & 15)) | (r1 >> ((16-r3) & 15));
@@ -1056,8 +1056,8 @@ uint8_t Random(void) // 8bb: verified to be ported correctly
 	r1 -= r4 + (r2 & 1);
 	r2 = (r2 << 15) | (r2 >> 1);
 
-	Seed2 = r4;
-	Seed1 = r1;
+	RandSeed2 = r4;
+	RandSeed1 = r1;
 
 	return (uint8_t)r1;
 }
@@ -1065,32 +1065,32 @@ uint8_t Random(void) // 8bb: verified to be ported correctly
 void GetLoopInformation(slaveChn_t *sc)
 {
 	uint8_t LoopMode;
-	int32_t LoopBeg, LoopEnd;
+	int32_t LoopBegin, LoopEnd;
 
 	assert(sc->SmpPtr != NULL);
 	sample_t *s = sc->SmpPtr;
 
-	bool LoopEnabled = !!(s->Flags & (SMPF_USE_LOOP | SMPF_USE_SUSLOOP));
-	bool SusOffAndNoNormalLoop = (s->Flags & SMPF_USE_SUSLOOP) && (sc->Flags & SF_NOTE_OFF) && !(s->Flags & SMPF_USE_LOOP);
+	bool LoopEnabled = !!(s->Flags & (SMPF_USE_LOOP | SMPF_USE_SUSTAINLOOP));
+	bool SustainLoopOnlyAndNoteOff = (s->Flags & SMPF_USE_SUSTAINLOOP) && (sc->Flags & SF_NOTE_OFF) && !(s->Flags & SMPF_USE_LOOP);
 
-	if (!LoopEnabled || SusOffAndNoNormalLoop)
+	if (!LoopEnabled || SustainLoopOnlyAndNoteOff)
 	{
-		LoopBeg = 0;
+		LoopBegin = 0;
 		LoopEnd = s->Length;
 		LoopMode = 0;
 	}
 	else
 	{
-		LoopBeg = s->LoopBeg;
+		LoopBegin = s->LoopBegin;
 		LoopEnd = s->LoopEnd;
 		LoopMode = s->Flags;
 
-		if (s->Flags & SMPF_USE_SUSLOOP)
+		if (s->Flags & SMPF_USE_SUSTAINLOOP)
 		{
 			if (!(sc->Flags & SF_NOTE_OFF)) // 8bb: sustain on (note not released)?
 			{
-				LoopBeg = s->SusLoopBeg;
-				LoopEnd = s->SusLoopEnd;
+				LoopBegin = s->SustainLoopBegin;
+				LoopEnd = s->SustainLoopEnd;
 				LoopMode >>= 1; // 8bb: loop mode = sustain loop mode
 			}
 		}
@@ -1099,10 +1099,10 @@ void GetLoopInformation(slaveChn_t *sc)
 	}
 
 	// 8bb: if any parameter changed, update all
-	if (sc->LoopMode != LoopMode || sc->LoopBeg != LoopBeg || sc->LoopEnd != LoopEnd)
+	if (sc->LoopMode != LoopMode || sc->LoopBegin != LoopBegin || sc->LoopEnd != LoopEnd)
 	{
 		sc->LoopMode = LoopMode;
-		sc->LoopBeg = LoopBeg;
+		sc->LoopBegin = LoopBegin;
 		sc->LoopEnd = LoopEnd;
 		sc->Flags |= SF_LOOP_CHANGED;
 	}
@@ -1118,15 +1118,15 @@ void ApplyRandomValues(hostChn_t *hc)
 	int8_t value = Random(); // -128->+127
 	if (ins->RandVol != 0) // Random volume, 0->100
 	{
-		int16_t volume = (((int8_t)ins->RandVol * value) >> 6) + 1;
-		volume = sc->SmpVol + ((volume * (int16_t)sc->SmpVol) / 199);
+		int16_t vol = (((int8_t)ins->RandVol * value) >> 6) + 1;
+		vol = sc->SmpVol + ((vol * (int16_t)sc->SmpVol) / 199);
 
-		if (volume < 0)
-			volume = 0;
-		else if (volume > 128)
-			volume = 128;
+		if (vol < 0)
+			vol = 0;
+		else if (vol > 128)
+			vol = 128;
 
-		sc->SmpVol = (uint8_t)volume;
+		sc->SmpVol = (uint8_t)vol;
 	}
 
 	value = Random(); // -128->+127
@@ -1163,9 +1163,9 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 		double dFreqDiv = (8363.0 * 1712.0) - (InitFreq * SlideValue);
 
-		// 8bb: added this, needed to make it work
+		// 8bb: added this, needed to make it work in extreme edge cases
 		if (dFreqDiv <= 0.0)
-			dFreqDiv = 1e-9; // 8bb: any very small positive number (epsilon)
+			dFreqDiv = 1e-9; // 8bb: any tiny positive number
 
 		sc->Flags |= SF_FREQ_CHANGE; // recalculate pitch!
 
@@ -1183,7 +1183,7 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 		sc->Flags |= SF_FREQ_CHANGE; // recalculate pitch!
 
-		const uint32_t AmigaBase = 1712 * 8363;
+		const uint32_t PeriodBase = 1712 * 8363;
 
 		if (SlideValue < 0)
 		{
@@ -1191,7 +1191,7 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 			// 8bb: slide down
 
-			uint64_t FreqSlide64 = (uint64_t)sc->Frequency * SlideValue;
+			uint64_t FreqSlide64 = (uint64_t)sc->Frequency * (uint32_t)SlideValue;
 			if (FreqSlide64 > UINT32_MAX)
 			{
 				sc->Flags |= SF_NOTE_STOP; // Turn off channel
@@ -1199,23 +1199,20 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 				return;
 			}
 
-			FreqSlide64 += AmigaBase;
+			FreqSlide64 += PeriodBase;
 
-			uint32_t TimesShifted = 0;
+			uint32_t ShitValue = 0;
 			while (FreqSlide64 > UINT32_MAX)
 			{
 				FreqSlide64 >>= 1;
-				TimesShifted++;
+				ShitValue++;
 			}
 
 			uint32_t Temp32 = (uint32_t)FreqSlide64;
+			uint64_t Temp64 = (uint64_t)sc->Frequency * (uint32_t)PeriodBase;
 
-			uint64_t Temp64 = (uint64_t)sc->Frequency * AmigaBase;
-			while (TimesShifted > 0)
-			{
-				Temp64 >>= 1;
-				TimesShifted--;
-			}
+			if (ShitValue > 0)
+				Temp64 >>= ShitValue;
 
 			if (Temp32 <= Temp64>>32)
 			{
@@ -1230,7 +1227,7 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 		{
 			// 8bb: slide up
 
-			uint64_t FreqSlide64 = (uint64_t)sc->Frequency * SlideValue;
+			uint64_t FreqSlide64 = (uint64_t)sc->Frequency * (uint32_t)SlideValue;
 			if (FreqSlide64 > UINT32_MAX)
 			{
 				sc->Flags |= SF_NOTE_STOP; // Turn off channel
@@ -1240,7 +1237,7 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 			uint32_t FreqSlide32 = (uint32_t)FreqSlide64;
 
-			uint32_t Temp32 = AmigaBase - FreqSlide32;
+			uint32_t Temp32 = PeriodBase - FreqSlide32;
 			if ((int32_t)Temp32 <= 0)
 			{
 				sc->Flags |= SF_NOTE_STOP;
@@ -1248,7 +1245,7 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 				return;
 			}
 
-			uint64_t Temp64 = (uint64_t)sc->Frequency * AmigaBase;
+			uint64_t Temp64 = (uint64_t)sc->Frequency * (uint32_t)PeriodBase;
 			if (Temp32 <= Temp64>>32)
 			{
 				sc->Flags |= SF_NOTE_STOP;
@@ -1258,7 +1255,6 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 			sc->Frequency = (uint32_t)(Temp64 / Temp32);
 		}
-
 #endif
 	}
 }
@@ -1335,7 +1331,6 @@ void PitchSlideUpLinear(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 			sc->Frequency = (uint32_t)Frequency;
 		}
 	}
-
 #endif
 }
 
@@ -1598,7 +1593,7 @@ static void UpdateData(void)
 	}
 }
 
-static void UpdateVibrato(slaveChn_t *sc) // 8bb: auto-vibrato
+static void UpdateAutoVibrato(slaveChn_t *sc) // 8bb: renamed from UpdateVibrato() to UpdateAutoVibrato() for clearity
 {
 	assert(sc->SmpPtr != NULL);
 	sample_t *smp = sc->SmpPtr;
@@ -1646,19 +1641,19 @@ static bool UpdateEnvelope(env_t *env, envState_t *envState, bool SustainRelease
 
 	if (env->Flags & 6) // 8bb: any loop at all?
 	{
-		uint8_t LoopBeg = env->LoopBeg;
+		uint8_t LoopBegin = env->LoopBegin;
 		uint8_t LoopEnd = env->LoopEnd;
 
 		bool HasLoop = !!(env->Flags & ENVF_LOOP);
-		bool HasSusLoop = !!(env->Flags & ENVF_SUSLOOP);
+		bool HasSustainLoop = !!(env->Flags & ENVF_SUSTAINLOOP);
 
 		bool Looping = true;
-		if (HasSusLoop)
+		if (HasSustainLoop)
 		{
 			if (!SustainReleased)
 			{
-				LoopBeg = env->SusLoopBeg;
-				LoopEnd = env->SusLoopEnd;
+				LoopBegin = env->SustainLoopBegin;
+				LoopEnd = env->SustainLoopEnd;
 			}
 			else if (!HasLoop)
 			{
@@ -1668,7 +1663,7 @@ static bool UpdateEnvelope(env_t *env, envState_t *envState, bool SustainRelease
 
 		if (Looping && NextNode > LoopEnd)
 		{
-			envState->CurNode = (envState->CurNode & 0xFF00) | LoopBeg;
+			envState->CurNode = (envState->CurNode & 0xFF00) | LoopBegin;
 			envState->Tick = envState->NextTick = Nodes[envState->CurNode & 0x00FF].Tick;
 			return false; // 8bb: last node not reached
 		}
@@ -1846,8 +1841,8 @@ static void UpdateInstruments(void)
 			volume = (volume * Song.GlobalVolume) >> 7;
 			assert(volume <= 32768);
 
-			sc->FinalVol = volume >> 8;
-			sc->vol16Bit = volume;
+			sc->FinalVol15Bit = volume; // 8bb: 0..32768
+			sc->FinalVol7Bit = volume >> 8; // 8bb: 0..128
 		}
 
 		if (sc->Flags & SF_RECALC_PAN) // Change in panning?
@@ -1857,7 +1852,7 @@ static void UpdateInstruments(void)
 
 			if (sc->Pan == PAN_SURROUND)
 			{
-				sc->FinalPlayPan = sc->FinalPan = sc->Pan;
+				sc->FinalPan = sc->Pan;
 			}
 			else
 			{
@@ -1874,16 +1869,16 @@ static void UpdateInstruments(void)
 				PanVal = sc->Pan + ((PanVal * PanEnvVal) >> 5);
 				PanVal -= 32;
 
-				sc->FinalPlayPan = (int8_t)(((PanVal * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32);
-				assert(sc->FinalPlayPan <= 64);
+				sc->FinalPan = (int8_t)(((PanVal * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32); // 8bb: 0..64
+				assert(sc->FinalPan <= 64);
 			}
 		}
 
-		UpdateVibrato(sc);
+		UpdateAutoVibrato(sc);
 	}
 }
 
-static void UpdateSamples(void)
+static void UpdateSamples(void) // 8bb: for songs without instruments
 {
 	slaveChn_t *sc = sChn;
 	for (uint32_t i = 0; i < Driver.NumChannels; i++, sc++)
@@ -1899,8 +1894,8 @@ static void UpdateSamples(void)
 			uint16_t volume = (((sc->Vol * sc->ChnVol * sc->SmpVol) >> 4) * Song.GlobalVolume) >> 7;
 			assert(volume <= 32768);
 
-			sc->FinalVol = volume >> 8;
-			sc->vol16Bit = volume;
+			sc->FinalVol15Bit = volume; // 8bb: 0..32768
+			sc->FinalVol7Bit = volume >> 8; // 8bb: 0..128
 		}
 
 		if (sc->Flags & SF_RECALC_PAN) // 8bb: recalculate panning
@@ -1908,20 +1903,18 @@ static void UpdateSamples(void)
 			sc->Flags &= ~SF_RECALC_PAN;
 			sc->Flags |= SF_PAN_CHANGED;
 
-			sc->FinalPan = sc->Pan;
-
 			if (sc->Pan == PAN_SURROUND)
 			{
-				sc->FinalPlayPan = sc->Pan;
+				sc->FinalPan = sc->Pan;
 			}
 			else
 			{
-				sc->FinalPlayPan = ((((int8_t)sc->Pan - 32) * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32;
-				assert(sc->FinalPlayPan <= 64);
+				sc->FinalPan = ((((int8_t)sc->Pan - 32) * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32; // 8bb: 0..64
+				assert(sc->FinalPan <= 64);
 			}
 		}
 
-		UpdateVibrato(sc);
+		UpdateAutoVibrato(sc);
 	}
 }
 
@@ -1985,23 +1978,31 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 	{
 		default:
 		case DRIVER_HQ:
+		{
 			if (!HQ_InitDriver(mixingFrequency))
 				return false;
+		}
 		break;
 
 		case DRIVER_SB16:
+		{
 			if (!SB16_InitDriver(mixingFrequency))
 				return false;
+		}
 		break;
 
 		case DRIVER_SB16MMX:
+		{
 			if (!SB16MMX_InitDriver(mixingFrequency))
 				return false;
+		}
 		break;
 
 		case DRIVER_WAVWRITER:
+		{
 			if (!WAVWriter_InitDriver(mixingFrequency))
 				return false;
+		}
 		break;
 	}
 
@@ -2050,8 +2051,9 @@ void Music_Stop(void)
 	Song.CurrentTick = 1;
 	Song.BreakRow = 0;
 
-	memset(hChn, 0, sizeof (hChn)); // 8bb: clear host channels
-	memset(sChn, 0, sizeof (sChn)); // 8bb: clear slave channels
+	// 8bb: clear host/slave channels
+	memset(hChn, 0, sizeof (hChn));
+	memset(sChn, 0, sizeof (sChn));
 
 	hostChn_t *hc = hChn;
 	for (uint8_t i = 0; i < MAX_HOST_CHANNELS; i++, hc++)
@@ -2087,8 +2089,7 @@ void Music_StopChannels(void)
 	for (int32_t i = 0; i < MAX_HOST_CHANNELS; i++, hc++)
 	{
 		hc->Flags = 0;
-		hc->PattLoopStartRow = 0;
-		hc->PattLoopCount = 0;
+		hc->PattLoopStartRow = hc->PattLoopCount = 0;
 	}
 
 	slaveChn_t *sc = sChn;
@@ -2150,10 +2151,10 @@ void Music_PlaySong(uint16_t order)
 	Song.ProcessRow = 0xFFFE;
 
 	// 8bb: reset seed (IT2 only does this at tracker startup, but let's do it here)
-	Seed1 = 0x1234;
-	Seed2 = 0x5678;
+	RandSeed1 = 0x1234;
+	RandSeed2 = 0x5678;
 
-	InterpretState = InterpretType = 0; // 8bb: clear MIDI filter interpretor state
+	MIDIInterpretState = MIDIInterpretType = 0; // 8bb: clear MIDI filter interpretor state
 
 	if (DriverResetMixer != NULL)
 		DriverResetMixer();
@@ -2176,10 +2177,10 @@ void Music_PrepareWAVRender(void)  // 8bb: added this
 	Song.ProcessRow = 0xFFFE;
 
 	// 8bb: reset seed (IT2 only does this at tracker startup, but let's do it here)
-	Seed1 = 0x1234;
-	Seed2 = 0x5678;
+	RandSeed1 = 0x1234;
+	RandSeed2 = 0x5678;
 
-	InterpretState = InterpretType = 0; // 8bb: clear MIDI filter interpretor state
+	MIDIInterpretState = MIDIInterpretType = 0; // 8bb: clear MIDI filter interpretor state
 
 	if (DriverResetMixer != NULL)
 		DriverResetMixer();

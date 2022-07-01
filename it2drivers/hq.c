@@ -102,7 +102,7 @@ static void HQ_MixSamples(void)
 		{
 			sc->Flags &= ~SF_CHAN_ON;
 
-			sc->vol16Bit = 0;
+			sc->FinalVol15Bit = 0;
 			sc->Flags |= SF_RECALC_FINALVOL;
 		}
 
@@ -168,19 +168,19 @@ static void HQ_MixSamples(void)
 			}
 			else
 			{
-				const int32_t Vol = sc->vol16Bit * MixVolume;
+				const int32_t Vol = sc->FinalVol15Bit * MixVolume;
 				if (!(Song.Header.Flags & ITF_STEREO)) // mono?
 				{
 					sc->fLeftVolume = sc->fRightVolume = Vol * (1.0f / (32768.0f * 128.0f));
 				}
-				else if (sc->FinalPlayPan == PAN_SURROUND)
+				else if (sc->FinalPan == PAN_SURROUND)
 				{
 					sc->fLeftVolume = sc->fRightVolume = Vol * (0.5f / (32768.0f * 128.0f));
 				}
 				else // normal (panned)
 				{
-					sc->fLeftVolume  = ((64-sc->FinalPlayPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
-					sc->fRightVolume = ((   sc->FinalPlayPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
+					sc->fLeftVolume  = ((64-sc->FinalPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
+					sc->fRightVolume = ((   sc->FinalPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
 				}
 			}
 		}
@@ -190,14 +190,14 @@ static void HQ_MixSamples(void)
 
 		uint32_t MixBlockSize = RealBytesToMix;
 
-		const bool Surround = (sc->FinalPlayPan == PAN_SURROUND);
+		const bool Surround = (sc->FinalPan == PAN_SURROUND);
 		const bool Sample16Bit = !!(sc->SmpBitDepth & SMPF_16BIT);
 		const bool Stereo = !!(s->Flags & SMPF_STEREO);
 		const bool FilterActive = (sc->fFilterb > 0.0f) || (sc->fFilterc > 0.0f);
 		MixFunc_t Mix = HQ_MixFunctionTables[(FilterActive << 3) + (Stereo << 2) + (Surround << 1) + Sample16Bit];
 		assert(Mix != NULL);
 
-		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // also actual length for non-loopers
+		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin; // also actual length for non-loopers
 		if ((int32_t)LoopLength > 0)
 		{
 			float *fMixBufferPtr = fMixBuffer;
@@ -210,7 +210,7 @@ static void HQ_MixSamples(void)
 					uint32_t SamplesToMix;
 					if (sc->LoopDirection == DIR_BACKWARDS)
 					{
-						SamplesToMix = sc->SamplingPosition - (sc->LoopBeg + 1);
+						SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
 
 						SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | (uint32_t)sc->Frac64) / sc->Delta64) + 1);
 						Driver.Delta64 = 0 - sc->Delta64;
@@ -233,9 +233,9 @@ static void HQ_MixSamples(void)
 
 					if (sc->LoopDirection == DIR_BACKWARDS)
 					{
-						if (sc->SamplingPosition <= sc->LoopBeg)
+						if (sc->SamplingPosition <= sc->LoopBegin)
 						{
-							NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SamplingPosition) % (LoopLength << 1);
+							NewLoopPos = (uint32_t)(sc->LoopBegin - sc->SamplingPosition) % (LoopLength << 1);
 							if (NewLoopPos >= LoopLength)
 							{
 								sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
@@ -243,7 +243,7 @@ static void HQ_MixSamples(void)
 							else
 							{
 								sc->LoopDirection = DIR_FORWARDS;
-								sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
+								sc->SamplingPosition = sc->LoopBegin + NewLoopPos;
 								sc->Frac64 = (uint32_t)(0 - sc->Frac64);
 							}
 						}
@@ -255,7 +255,7 @@ static void HQ_MixSamples(void)
 							NewLoopPos = (uint32_t)(sc->SamplingPosition - sc->LoopEnd) % (LoopLength << 1);
 							if (NewLoopPos >= LoopLength)
 							{
-								sc->SamplingPosition = sc->LoopBeg + (NewLoopPos - LoopLength);
+								sc->SamplingPosition = sc->LoopBegin + (NewLoopPos - LoopLength);
 							}
 							else
 							{
@@ -284,7 +284,7 @@ static void HQ_MixSamples(void)
 					fMixBufferPtr += SamplesToMix << 1;
 
 					if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
-						sc->SamplingPosition = sc->LoopBeg + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
+						sc->SamplingPosition = sc->LoopBegin + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 				}
 			}
 			else // no loop
@@ -497,20 +497,20 @@ static void HQ_FixSamples(void)
 				}
 				else
 				{
-					if (s->LoopBeg == 0)
+					if (s->LoopBegin == 0)
 						Data16[-1] = Data16[s->LoopEnd-1];
 
-					Data16[s->LoopEnd+0] = Data16[s->LoopBeg+0];
-					Data16[s->LoopEnd+1] = Data16[s->LoopBeg+1];
+					Data16[s->LoopEnd+0] = Data16[s->LoopBegin+0];
+					Data16[s->LoopEnd+1] = Data16[s->LoopBegin+1];
 
 					// right sample (if present)
 					if (Data16R != NULL)
 					{
-						if (s->LoopBeg == 0)
+						if (s->LoopBegin == 0)
 							Data16R[-1] = Data16R[s->LoopEnd-1];
 
-						Data16R[s->LoopEnd+0] = Data16R[s->LoopBeg+0];
-						Data16R[s->LoopEnd+1] = Data16R[s->LoopBeg+1];
+						Data16R[s->LoopEnd+0] = Data16R[s->LoopBegin+0];
+						Data16R[s->LoopEnd+1] = Data16R[s->LoopBegin+1];
 					}
 				}
 			}
@@ -565,20 +565,20 @@ static void HQ_FixSamples(void)
 				}
 				else
 				{
-					if (s->LoopBeg == 0)
+					if (s->LoopBegin == 0)
 						Data8[-1] = Data8[s->LoopEnd-1];
 
-					Data8[s->LoopEnd+0] = Data8[s->LoopBeg+0];
-					Data8[s->LoopEnd+1] = Data8[s->LoopBeg+1];
+					Data8[s->LoopEnd+0] = Data8[s->LoopBegin+0];
+					Data8[s->LoopEnd+1] = Data8[s->LoopBegin+1];
 
 					// right sample (if present)
 					if (Data8R != NULL)
 					{
-						if (s->LoopBeg == 0)
+						if (s->LoopBegin == 0)
 							Data8R[-1] = Data8R[s->LoopEnd-1];
 
-						Data8R[s->LoopEnd+0] = Data8R[s->LoopBeg+0];
-						Data8R[s->LoopEnd+1] = Data8R[s->LoopBeg+1];
+						Data8R[s->LoopEnd+0] = Data8R[s->LoopBegin+0];
+						Data8R[s->LoopEnd+1] = Data8R[s->LoopBegin+1];
 					}
 				}
 			}

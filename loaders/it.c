@@ -171,10 +171,10 @@ bool LoadIT(MEMFILE *m)
 
 				if (!ReadBytes(m, &env->Flags, 1)) return false;
 				if (!ReadBytes(m, &env->Num, 1)) return false;
-				if (!ReadBytes(m, &env->LoopBeg, 1)) return false;
+				if (!ReadBytes(m, &env->LoopBegin, 1)) return false;
 				if (!ReadBytes(m, &env->LoopEnd, 1)) return false;
-				if (!ReadBytes(m, &env->SusLoopBeg, 1)) return false;
-				if (!ReadBytes(m, &env->SusLoopEnd, 1)) return false;
+				if (!ReadBytes(m, &env->SustainLoopBegin, 1)) return false;
+				if (!ReadBytes(m, &env->SustainLoopEnd, 1)) return false;
 
 				envNode_t *node = env->NodePoints;
 				for (uint32_t k = 0; k < 25; k++, node++)
@@ -191,10 +191,10 @@ bool LoadIT(MEMFILE *m)
 			mseek(m, 4, SEEK_CUR); // skip unwanted stuff
 			if (!ReadBytes(m, ins->DOSFilename, 13)) return false;
 			if (!ReadBytes(m, &ins->VolEnv.Flags, 1)) return false;
-			if (!ReadBytes(m, &ins->VolEnv.LoopBeg, 1)) return false;
+			if (!ReadBytes(m, &ins->VolEnv.LoopBegin, 1)) return false;
 			if (!ReadBytes(m, &ins->VolEnv.LoopEnd, 1)) return false;
-			if (!ReadBytes(m, &ins->VolEnv.SusLoopBeg, 1)) return false;
-			if (!ReadBytes(m, &ins->VolEnv.SusLoopEnd, 1)) return false;
+			if (!ReadBytes(m, &ins->VolEnv.SustainLoopBegin, 1)) return false;
+			if (!ReadBytes(m, &ins->VolEnv.SustainLoopEnd, 1)) return false;
 			mseek(m, 2, SEEK_CUR); // skip unwanted stuff
 			if (!ReadBytes(m, &ins->FadeOut, 2)) return false;
 			if (!ReadBytes(m, &ins->NNA, 1)) return false;
@@ -275,11 +275,11 @@ bool LoadIT(MEMFILE *m)
 		if (!ReadBytes(m, &s->Cvt, 1)) return false;
 		if (!ReadBytes(m, &s->DefPan, 1)) return false;
 		if (!ReadBytes(m, &s->Length, 4)) return false;
-		if (!ReadBytes(m, &s->LoopBeg, 4)) return false;
+		if (!ReadBytes(m, &s->LoopBegin, 4)) return false;
 		if (!ReadBytes(m, &s->LoopEnd, 4)) return false;
 		if (!ReadBytes(m, &s->C5Speed, 4)) return false;
-		if (!ReadBytes(m, &s->SusLoopBeg, 4)) return false;
-		if (!ReadBytes(m, &s->SusLoopEnd, 4)) return false;
+		if (!ReadBytes(m, &s->SustainLoopBegin, 4)) return false;
+		if (!ReadBytes(m, &s->SustainLoopEnd, 4)) return false;
 		if (!ReadBytes(m, &s->OffsetInFile, 4)) return false;
 		if (!ReadBytes(m, &s->AutoVibratoSpeed, 1)) return false;
 		if (!ReadBytes(m, &s->AutoVibratoDepth, 1)) return false;

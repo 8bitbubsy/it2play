@@ -133,7 +133,7 @@ bool LoadS3M(MEMFILE *m)
 		ReadBytes(m, &MemSegL, 2);
 
 		ReadBytes(m, &s->Length, 4);
-		ReadBytes(m, &s->LoopBeg, 4);
+		ReadBytes(m, &s->LoopBegin, 4);
 		ReadBytes(m, &s->LoopEnd, 4);
 		ReadBytes(m, &s->Vol, 1);
 

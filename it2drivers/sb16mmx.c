@@ -181,17 +181,17 @@ static void SB16MMX_MixSamples(void)
 
 					if (!(Song.Header.Flags & ITF_STEREO)) // 8bb: mono?
 					{
-						sc->LeftVolume = sc->RightVolume = (sc->vol16Bit * MixVolume) >> 9; // 8bb: 0..8192
+						sc->LeftVolume = sc->RightVolume = (sc->FinalVol15Bit * MixVolume) >> 9; // 8bb: 0..8192
 					}
-					else if (sc->FinalPlayPan == PAN_SURROUND)
+					else if (sc->FinalPan == PAN_SURROUND)
 					{
-						sc->LeftVolume = (sc->vol16Bit * MixVolume) >> 10; // 8bb: 0..4096
+						sc->LeftVolume = (sc->FinalVol15Bit * MixVolume) >> 10; // 8bb: 0..4096
 						sc->RightVolume = -sc->LeftVolume;
 					}
 					else // 8bb: normal (panned)
 					{
-						sc->LeftVolume  = ((64-sc->FinalPlayPan) * MixVolume * sc->vol16Bit) >> 15; // 8bb: 0..8192
-						sc->RightVolume = (    sc->FinalPlayPan  * MixVolume * sc->vol16Bit) >> 15;
+						sc->LeftVolume  = ((64-sc->FinalPan) * MixVolume * sc->FinalVol15Bit) >> 15; // 8bb: 0..8192
+						sc->RightVolume = (    sc->FinalPan  * MixVolume * sc->FinalVol15Bit) >> 15;
 					}
 
 					if (!(sc->Flags & (SF_NEW_NOTE|SF_NOTE_STOP|SF_LOOP_CHANGED)) && sc->LeftVolume == OldLeftVolume && sc->RightVolume == OldRightVolume)
@@ -227,7 +227,7 @@ static void SB16MMX_MixSamples(void)
 
 		if (sc->MixOffset == 4) // 8bb: use position update routine (zero volume)
 		{
-			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // 8bb: also length for non-loopers
+			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin; // 8bb: also length for non-loopers
 			if ((int32_t)LoopLength > 0)
 			{
 				if (sc->LoopMode == LOOP_PINGPONG)
@@ -289,7 +289,7 @@ static void SB16MMX_MixSamples(void)
 			if (sc->MixOffset == 3 && sc->filtera == 0) // 8bb: filters?
 				sc->filtera = 1;
 
-			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg; // 8bb: also length for non-loopers
+			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin; // 8bb: also length for non-loopers
 			if ((int32_t)LoopLength > 0)
 			{
 				int32_t *MixBufferPtr = MixBuffer;
@@ -300,9 +300,9 @@ static void SB16MMX_MixSamples(void)
 						uint32_t NewLoopPos;
 						if (sc->LoopDirection == DIR_BACKWARDS)
 						{
-							if (sc->SamplingPosition <= sc->LoopBeg)
+							if (sc->SamplingPosition <= sc->LoopBegin)
 							{
-								NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SamplingPosition) % (LoopLength << 1);
+								NewLoopPos = (uint32_t)(sc->LoopBegin - sc->SamplingPosition) % (LoopLength << 1);
 								if (NewLoopPos >= LoopLength)
 								{
 									sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
@@ -310,7 +310,7 @@ static void SB16MMX_MixSamples(void)
 								else
 								{
 									sc->LoopDirection = DIR_FORWARDS;
-									sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
+									sc->SamplingPosition = sc->LoopBegin + NewLoopPos;
 									sc->Frac32 = (uint16_t)(0 - sc->Frac32);
 								}
 							}
@@ -322,7 +322,7 @@ static void SB16MMX_MixSamples(void)
 								NewLoopPos = (uint32_t)(sc->SamplingPosition - sc->LoopEnd) % (LoopLength << 1);
 								if (NewLoopPos >= LoopLength)
 								{
-									sc->SamplingPosition = sc->LoopBeg + (NewLoopPos - LoopLength);
+									sc->SamplingPosition = sc->LoopBegin + (NewLoopPos - LoopLength);
 								}
 								else
 								{
@@ -336,7 +336,7 @@ static void SB16MMX_MixSamples(void)
 						uint32_t SamplesToMix;
 						if (sc->LoopDirection == DIR_BACKWARDS)
 						{
-							SamplesToMix = sc->SamplingPosition - (sc->LoopBeg + 1);
+							SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
 #if CPU_32BIT
 							if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 								SamplesToMix = UINT16_MAX;
@@ -369,7 +369,7 @@ static void SB16MMX_MixSamples(void)
 					while (MixBlockSize > 0)
 					{
 						if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
-							sc->SamplingPosition = sc->LoopBeg + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
+							sc->SamplingPosition = sc->LoopBegin + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 
 						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 #if CPU_32BIT
@@ -512,7 +512,7 @@ static void SB16MMX_FixSamples(void)
 		int8_t *smp8Ptr = &data8[s->Length << Sample16Bit];
 
 		// 8bb: added this protection for looped samples
-		if (HasLoop && s->LoopEnd-s->LoopBeg < 2)
+		if (HasLoop && s->LoopEnd-s->LoopBegin < 2)
 		{
 			*smp8Ptr++ = 0;
 			*smp8Ptr++ = 0;
@@ -533,7 +533,7 @@ static void SB16MMX_FixSamples(void)
 			}
 			else // 8bb: forward loop
 			{
-				src = s->LoopBeg;
+				src = s->LoopBegin;
 			}
 
 			if (Sample16Bit)

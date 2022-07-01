@@ -44,17 +44,17 @@ void UpdateForwardsLoop(slaveChn_t *sc, uint32_t numSamples)
 
 	if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd) // Reset position...
 	{
-		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg;
+		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin;
 		if (LoopLength == 0)
 			sc->SamplingPosition = 0;
 		else
-			sc->SamplingPosition = sc->LoopBeg + ((sc->SamplingPosition - sc->LoopEnd) % LoopLength);
+			sc->SamplingPosition = sc->LoopBegin + ((sc->SamplingPosition - sc->LoopEnd) % LoopLength);
 	}
 }
 
 void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 {
-	const uint32_t LoopLength = sc->LoopEnd - sc->LoopBeg;
+	const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin;
 
 	const uint64_t SamplesToMix = (uint64_t)sc->Delta32 * (uint32_t)numSamples;
 	uint32_t IntSamples = (uint32_t)(SamplesToMix >> MIX_FRAC_BITS);
@@ -67,9 +67,9 @@ void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 		sc->SamplingPosition -= IntSamples;
 		sc->Frac32 &= MIX_FRAC_MASK;
 
-		if (sc->SamplingPosition <= sc->LoopBeg)
+		if (sc->SamplingPosition <= sc->LoopBegin)
 		{
-			uint32_t NewLoopPos = (uint32_t)(sc->LoopBeg - sc->SamplingPosition) % (LoopLength << 1);
+			uint32_t NewLoopPos = (uint32_t)(sc->LoopBegin - sc->SamplingPosition) % (LoopLength << 1);
 			if (NewLoopPos >= LoopLength)
 			{
 				sc->SamplingPosition = (sc->LoopEnd - 1) + (LoopLength - NewLoopPos);
@@ -77,7 +77,7 @@ void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 			else
 			{
 				sc->LoopDirection = DIR_FORWARDS;
-				sc->SamplingPosition = sc->LoopBeg + NewLoopPos;
+				sc->SamplingPosition = sc->LoopBegin + NewLoopPos;
 				sc->Frac32 = (uint16_t)(0 - sc->Frac32);
 			}
 		}
@@ -94,7 +94,7 @@ void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 			uint32_t NewLoopPos = (uint32_t)(sc->SamplingPosition - sc->LoopEnd) % (LoopLength << 1);
 			if (NewLoopPos >= LoopLength)
 			{
-				sc->SamplingPosition = sc->LoopBeg + (NewLoopPos - LoopLength);
+				sc->SamplingPosition = sc->LoopBegin + (NewLoopPos - LoopLength);
 			}
 			else
 			{
