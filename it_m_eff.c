@@ -10,7 +10,7 @@
 
 static const uint8_t SlideTable[9] = { 1, 4, 8, 16, 32, 64, 96, 128, 255 };
 
-static void InitCommandG11(hostChn_t *hc); // Jumped to from Lxx
+static void InitCommandG11(hostChn_t *hc);
 static void InitCommandM2(hostChn_t *hc, uint8_t vol);
 static void InitCommandX2(hostChn_t *hc, uint8_t pan); // 8bb: pan = 0..63
 static void CommandH5(hostChn_t *hc, slaveChn_t *sc, int8_t VibratoData);
@@ -57,7 +57,7 @@ static void InitVibrato(hostChn_t *hc)
 	}
 }
 
-static void InitCommandD7(hostChn_t *hc, slaveChn_t *sc) // Jmp point for Lxx
+static void InitCommandD7(hostChn_t *hc, slaveChn_t *sc) // Jmp point for Lxx (8bb: and Dxx/Kxx)
 {
 	sc->Flags |= SF_RECALC_VOL;
 
@@ -597,7 +597,7 @@ static bool Gxx_ChangeSample(hostChn_t *hc, slaveChn_t *sc, uint8_t sample)
 	return true;
 }
 
-static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx
+static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx (8bb: and normal tone portamento)
 {
 	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 

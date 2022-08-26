@@ -1593,7 +1593,7 @@ static void UpdateData(void)
 	}
 }
 
-static void UpdateAutoVibrato(slaveChn_t *sc) // 8bb: renamed from UpdateVibrato() to UpdateAutoVibrato() for clearity
+static void UpdateAutoVibrato(slaveChn_t *sc) // 8bb: renamed from UpdateVibrato() to UpdateAutoVibrato() for clarity
 {
 	assert(sc->SmpPtr != NULL);
 	sample_t *smp = sc->SmpPtr;
@@ -2013,7 +2013,7 @@ bool Music_Init(int32_t mixingFrequency, int32_t mixingBufferSize, int32_t Drive
 		for (int16_t i = 0; i < 128; i++)
 			Driver.QualityFactorTable[i] = (float)pow(10.0, (-i * 24.0) / (128.0 * 20.0));
 
-		Driver.FreqParameterMultiplier = -0.000162760407f; // -1/(24*256) (8bb: w/ rounding error!)
+		Driver.FreqParameterMultiplier = -0.000162760407f; // -1/(24*256) (8bb: w/ small rounding error!)
 		Driver.FreqMultiplier = 0.00121666200f * (float)mixingFrequency; // 1/(2*PI*110.0*2^0.25) * mixingFrequency
 	}
 
@@ -2392,7 +2392,9 @@ bool Music_RenderToWAV(const char *filenameOut)
 		}
 
 		DriverMixSamples();
-		int32_t BytesToMix = DriverPostMix(AudioBuffer, 0);
+
+		const int32_t BytesToMix = DriverPostMix(AudioBuffer, 0);
+		assert(BytesToMix <= MaxSamplesToMix);
 
 		fwrite(AudioBuffer, 2, BytesToMix * 2, f);
 		TotalSamples += BytesToMix * 2;
