@@ -332,12 +332,28 @@ static int32_t renderToWav(void)
 	modifyTerminal();
 #endif
 	int16_t currOrder, orderEnd;
+	
+	int32_t percentageHi = 0;
 	while (WAVRender_Flag)
 	{
 		currOrder = getCurrOrder();
 		orderEnd = getOrderEnd(currOrder);
 
-		printf("Percentage done: %d%%     \r", (currOrder*100)/orderEnd);
+		int32_t percentage = 0;
+		if (orderEnd > 0)
+		{
+			percentage = ((currOrder * 100) / orderEnd) - 1;
+			percentage = CLAMP(percentage, 0, 99);
+		}
+
+		if (percentage > percentageHi)
+			percentageHi = percentage;
+
+		if (percentage >= percentageHi)
+			printf("Percentage done: %d%%   \r", percentage);
+		else
+			printf("Percentage done: %d%% (note: song may have looped!)   \r", percentage);
+
 		Sleep(25);
 		if ( _kbhit())
 			WAVRender_Flag = false;
