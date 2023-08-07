@@ -404,7 +404,7 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 				}
 				else
 				{
-					uint16_t volume = sc->FinalVol7Bit;
+					uint16_t volume = sc->FinalVol128;
 
 					if (volume == 0)
 						volume = 1;
@@ -903,10 +903,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			continue;
 
 		ChannelCountTable[sc->Smp]++;
-		if ((sc->HostChnNum & CHN_DISOWNED) && sc->FinalVol7Bit < ChannelVolumeTable[sc->Smp])
+		if ((sc->HostChnNum & CHN_DISOWNED) && sc->FinalVol128 < ChannelVolumeTable[sc->Smp])
 		{
 			ChannelLocationTable[sc->Smp] = sc;
-			ChannelVolumeTable[sc->Smp] = sc->FinalVol7Bit;
+			ChannelVolumeTable[sc->Smp] = sc->FinalVol128;
 		}
 	}
 
@@ -962,10 +962,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			lowestVol = 255;
 			for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 			{
-				if ((scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol7Bit <= lowestVol)
+				if ((scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol128 <= lowestVol)
 				{
 					sc = scTmp;
-					lowestVol = scTmp->FinalVol7Bit;
+					lowestVol = scTmp->FinalVol128;
 				}
 			}
 
@@ -987,7 +987,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		slaveChn_t *scTmp = AllocateSlaveOffset;
 		for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 		{
-			if (scTmp->HostChnNum != hostChnNum || scTmp->FinalVol7Bit >= lowestVol)
+			if (scTmp->HostChnNum != hostChnNum || scTmp->FinalVol128 >= lowestVol)
 				continue;
 
 			// Now check if any other channel contains this sample
@@ -995,7 +995,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 			if (scTmp->Smp == targetSmp)
 			{
 				sc = scTmp;
-				lowestVol = scTmp->FinalVol7Bit;
+				lowestVol = scTmp->FinalVol128;
 				continue;
 			}
 
@@ -1009,7 +1009,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 				{
 					// OK found a second sample.
 					sc = scTmp;
-					lowestVol = scTmp->FinalVol7Bit;
+					lowestVol = scTmp->FinalVol128;
 					break;
 				}
 			}
@@ -1029,10 +1029,10 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 	slaveChn_t *scTmp = AllocateSlaveOffset;
 	for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
 	{
-		if (scTmp->Smp == sc->Smp && (scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol7Bit < lowestVol)
+		if (scTmp->Smp == sc->Smp && (scTmp->HostChnNum & CHN_DISOWNED) && scTmp->FinalVol128 < lowestVol)
 		{
 			sc = scTmp;
-			lowestVol = scTmp->FinalVol7Bit;
+			lowestVol = scTmp->FinalVol128;
 		}
 	}
 
@@ -1841,8 +1841,8 @@ static void UpdateInstruments(void)
 			volume = (volume * Song.GlobalVolume) >> 7;
 			assert(volume <= 32768);
 
-			sc->FinalVol15Bit = volume; // 8bb: 0..32768
-			sc->FinalVol7Bit = volume >> 8; // 8bb: 0..128
+			sc->FinalVol32768 = volume; // 8bb: 0..32768
+			sc->FinalVol128 = volume >> 8; // 8bb: 0..128
 		}
 
 		if (sc->Flags & SF_RECALC_PAN) // Change in panning?
@@ -1894,8 +1894,8 @@ static void UpdateSamples(void) // 8bb: for songs without instruments
 			uint16_t volume = (((sc->Vol * sc->ChnVol * sc->SmpVol) >> 4) * Song.GlobalVolume) >> 7;
 			assert(volume <= 32768);
 
-			sc->FinalVol15Bit = volume; // 8bb: 0..32768
-			sc->FinalVol7Bit = volume >> 8; // 8bb: 0..128
+			sc->FinalVol32768 = volume; // 8bb: 0..32768
+			sc->FinalVol128 = volume >> 8; // 8bb: 0..128
 		}
 
 		if (sc->Flags & SF_RECALC_PAN) // 8bb: recalculate panning

@@ -102,7 +102,7 @@ static void HQ_MixSamples(void)
 		{
 			sc->Flags &= ~SF_CHAN_ON;
 
-			sc->FinalVol15Bit = 0;
+			sc->FinalVol32768 = 0;
 			sc->Flags |= SF_RECALC_FINALVOL;
 		}
 
@@ -168,7 +168,7 @@ static void HQ_MixSamples(void)
 			}
 			else
 			{
-				const int32_t Vol = sc->FinalVol15Bit * MixVolume;
+				const int32_t Vol = sc->FinalVol32768 * MixVolume;
 				if (!(Song.Header.Flags & ITF_STEREO)) // mono?
 				{
 					sc->fLeftVolume = sc->fRightVolume = Vol * (1.0f / (32768.0f * 128.0f));

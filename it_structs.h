@@ -177,7 +177,7 @@ typedef struct slaveChn_t
 	uint8_t SmpBitDepth, AutoVibratoPos;
 	uint16_t AutoVibratoDepth;
 	int32_t OldLeftVolume, OldRightVolume;
-	uint8_t FinalVol7Bit, Vol, VolSet, ChnVol, SmpVol, FinalPan;
+	uint8_t FinalVol128, Vol, VolSet, ChnVol, SmpVol, FinalPan;
 	uint16_t FadeOut;
 	uint8_t DCT, DCA, Pan, PanSet;
 	instrument_t *InsPtr;
@@ -189,7 +189,7 @@ typedef struct slaveChn_t
 	uint16_t MIDIBank;
 	int32_t LoopBegin, LoopEnd;
 	uint32_t Frac32;
-	uint16_t FinalVol15Bit;
+	uint16_t FinalVol32768;
 	int32_t SamplingPosition;
 	int32_t filtera, filterb, filterc;
 	envState_t VolEnvState, PanEnvState, PitchEnvState;

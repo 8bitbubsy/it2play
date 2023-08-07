@@ -57,16 +57,16 @@ static void SB16_MixSamples(void)
 			{
 				if (!(Song.Header.Flags & ITF_STEREO)) // 8bb: mono?
 				{
-					sc->LeftVolume = sc->RightVolume = (sc->FinalVol15Bit * MixVolume) >> 8; // 8bb: 0..16384
+					sc->LeftVolume = sc->RightVolume = (sc->FinalVol32768 * MixVolume) >> 8; // 8bb: 0..16384
 				}
 				else if (sc->FinalPan == PAN_SURROUND)
 				{
-					sc->LeftVolume = sc->RightVolume = (sc->FinalVol15Bit * MixVolume) >> 9; // 8bb: 0..8192
+					sc->LeftVolume = sc->RightVolume = (sc->FinalVol32768 * MixVolume) >> 9; // 8bb: 0..8192
 				}
 				else // 8bb: normal (panned)
 				{
-					sc->LeftVolume  = ((64-sc->FinalPan) * MixVolume * sc->FinalVol15Bit) >> 14; // 8bb: 0..16384
-					sc->RightVolume = (    sc->FinalPan  * MixVolume * sc->FinalVol15Bit) >> 14;
+					sc->LeftVolume  = ((64-sc->FinalPan) * MixVolume * sc->FinalVol32768) >> 14; // 8bb: 0..16384
+					sc->RightVolume = (    sc->FinalPan  * MixVolume * sc->FinalVol32768) >> 14;
 				}
 			}
 		}
