@@ -1434,7 +1434,7 @@ static void UpdateGOTONote(void) // Get offset
 				hc->Ins = *p++;
 
 			if (hc->NotePackMask & 4)
-				hc->Vol = *p++;
+				hc->RawVolColumn = *p++;
 
 			if (hc->NotePackMask & 8)
 			{
@@ -1478,7 +1478,7 @@ static void UpdateNoteData(void)
 			hc->Ins = *p++;
 
 		if (hc->NotePackMask & 4)
-			hc->Vol = *p++;
+			hc->RawVolColumn = *p++;
 
 		if (hc->NotePackMask & 8)
 		{

@@ -112,11 +112,11 @@ static void InitVolumeEffect(hostChn_t *hc)
 	if (!(hc->NotePackMask & 0x44))
 		return;
 
-	int8_t volCmd = (hc->Vol & 0x7F) - 65;
+	int8_t volCmd = (hc->RawVolColumn & 0x7F) - 65;
 	if (volCmd < 0)
 		return;
 
-	if (hc->Vol & 0x80)
+	if (hc->RawVolColumn & 0x80)
 		volCmd += 60;
 
 	uint8_t cmd = (uint8_t)volCmd / 10;
@@ -308,8 +308,8 @@ static void InitNoCommand3(hostChn_t *hc, uint8_t hcFlags)
 
 static void NoOldEffect(hostChn_t *hc, uint8_t hcFlags)
 {
-	uint8_t vol = hc->Vol;
-	if (!((hc->NotePackMask & 0x44) && vol <= 64)) // 8bb: improve this yucky logic...
+	uint8_t vol = hc->RawVolColumn;
+	if (!(hc->NotePackMask & 0x44) || vol > 64)
 	{
 		if ((hc->NotePackMask & 0x44) && (vol & 0x7F) < 65)
 		{
@@ -413,7 +413,8 @@ void InitNoCommand(hostChn_t *hc)
 		}
 	}
 
-	if ((hc->NotePackMask & 0x44) && hc->Vol >= 193 && hc->Vol <= 202 && (hc->Flags & HF_CHAN_ON))
+	bool volColumnPortamento = (hc->RawVolColumn >= 193 && hc->RawVolColumn <= 202);
+	if ((hc->NotePackMask & 0x44) && volColumnPortamento && (hc->Flags & HF_CHAN_ON))
 	{
 		InitVolumeEffect(hc);
 		return;
@@ -462,11 +463,6 @@ void InitCommandA(hostChn_t *hc)
 
 void InitCommandB(hostChn_t *hc)
 {
-	/*
-	if (hc->CmdVal <= Song.CurrentOrder)
-		Song.StopSong = true; // 8bb: for WAV writer
-	*/
-
 	Song.ProcessOrder = hc->CmdVal - 1;
 	Song.ProcessRow = 0xFFFE;
 
@@ -698,15 +694,15 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx (8bb: and normal
 
 	if (hc->NotePackMask & 0x44)
 	{
-		if (hc->Vol <= 64)
+		if (hc->RawVolColumn <= 64)
 		{
-			vol = hc->Vol;
+			vol = hc->RawVolColumn;
 			volFromVolColumn = true;
 		}
 		else
 		{
-			if ((hc->Vol & 0x7F) < 65)
-				InitCommandX2(hc, hc->Vol - 128);
+			if ((hc->RawVolColumn & 0x7F) < 65)
+				InitCommandX2(hc, hc->RawVolColumn - 128);
 		}
 	}
 
@@ -980,7 +976,7 @@ void InitCommandP(hostChn_t *hc)
 	if (hc->Flags & HF_CHAN_ON)
 		pan = ((slaveChn_t *)hc->SlaveChnPtr)->PanSet;
 
-	if (pan == PAN_SURROUND) // Surround??
+	if (pan == PAN_SURROUND)
 		return;
 
 	uint8_t hi = hc->P00 & 0xF0;
