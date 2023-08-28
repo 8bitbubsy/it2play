@@ -61,8 +61,8 @@ static void InitCommandD7(hostChn_t *hc, slaveChn_t *sc) // Jmp point for Lxx (8
 {
 	sc->Flags |= SF_RECALC_VOL;
 
-	uint8_t hi = hc->DKL & 0xF0;
-	uint8_t lo = hc->DKL & 0x0F;
+	uint8_t hi = hc->EfxMem_DKL & 0xF0;
+	uint8_t lo = hc->EfxMem_DKL & 0x0F;
 
 	if (lo == 0)
 	{
@@ -144,14 +144,14 @@ static void InitVolumeEffect(hostChn_t *hc)
 		}
 		else if (cmd < 6)
 		{
-			hc->EFG = val << 2;
+			hc->EfxMem_EFG = val << 2;
 		}
 		else if (cmd == 6)
 		{
 			if (Song.Header.Flags & ITF_COMPAT_GXX)
-				hc->GOE = SlideTable[val-1];
+				hc->EfxMem_G_Compat = SlideTable[val-1];
 			else
-				hc->EFG = SlideTable[val-1];
+				hc->EfxMem_EFG = SlideTable[val-1];
 		}
 	}
 
@@ -242,12 +242,12 @@ void VolumeCommandD(hostChn_t *hc)
 
 void VolumeCommandE(hostChn_t *hc)
 {
-	CommandEChain(hc, hc->EFG << 2);
+	CommandEChain(hc, hc->EfxMem_EFG << 2);
 }
 
 void VolumeCommandF(hostChn_t *hc)
 {
-	CommandFChain(hc, hc->EFG << 2);
+	CommandFChain(hc, hc->EfxMem_EFG << 2);
 }
 
 void VolumeCommandG(hostChn_t *hc)
@@ -255,10 +255,7 @@ void VolumeCommandG(hostChn_t *hc)
 	if (!(hc->Flags & HF_PITCH_SLIDE_ONGOING))
 		return;
 
-	int16_t SlideValue = hc->EFG << 2;
-	if (Song.Header.Flags & ITF_COMPAT_GXX)
-		SlideValue = hc->GOE << 2;
-
+	int16_t SlideValue = (Song.Header.Flags & ITF_COMPAT_GXX) ? (hc->EfxMem_G_Compat << 2) : (hc->EfxMem_EFG << 2);
 	if (SlideValue == 0)
 		return;
 
@@ -486,9 +483,9 @@ void InitCommandD(hostChn_t *hc)
 
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal == 0)
-		CmdVal = hc->DKL;
+		CmdVal = hc->EfxMem_DKL;
 
-	hc->DKL = CmdVal;
+	hc->EfxMem_DKL = CmdVal;
 
 	if (!(hc->Flags & HF_CHAN_ON))
 		return;
@@ -503,25 +500,25 @@ void InitCommandE(hostChn_t *hc)
 
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal == 0)
-		CmdVal = hc->EFG;
+		CmdVal = hc->EfxMem_EFG;
 
-	hc->EFG = CmdVal;
+	hc->EfxMem_EFG = CmdVal;
 
-	if (!(hc->Flags & HF_CHAN_ON) || hc->EFG == 0)
+	if (!(hc->Flags & HF_CHAN_ON) || hc->EfxMem_EFG == 0)
 		return;
 
-	if ((hc->EFG & 0xF0) < 0xE0)
+	if ((hc->EfxMem_EFG & 0xF0) < 0xE0)
 	{
-		*(uint16_t *)&hc->MiscEfxData[0] = hc->EFG << 2;
+		*(uint16_t *)&hc->MiscEfxData[0] = hc->EfxMem_EFG << 2;
 		hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON; // call update only if necess.
 		return;
 	}
 
-	if ((hc->EFG & 0x0F) == 0)
+	if ((hc->EfxMem_EFG & 0x0F) == 0)
 		return;
 
-	uint16_t SlideVal = hc->EFG & 0x0F;
-	if ((hc->EFG & 0xF0) != 0xE0)
+	uint16_t SlideVal = hc->EfxMem_EFG & 0x0F;
+	if ((hc->EfxMem_EFG & 0xF0) != 0xE0)
 		SlideVal <<= 2;
 
 	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
@@ -535,25 +532,25 @@ void InitCommandF(hostChn_t *hc)
 
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal == 0)
-		CmdVal = hc->EFG;
+		CmdVal = hc->EfxMem_EFG;
 
-	hc->EFG = CmdVal;
+	hc->EfxMem_EFG = CmdVal;
 
-	if (!(hc->Flags & HF_CHAN_ON) || hc->EFG == 0)
+	if (!(hc->Flags & HF_CHAN_ON) || hc->EfxMem_EFG == 0)
 		return;
 
-	if ((hc->EFG & 0xF0) < 0xE0)
+	if ((hc->EfxMem_EFG & 0xF0) < 0xE0)
 	{
-		*(uint16_t *)&hc->MiscEfxData[0] = hc->EFG << 2;
+		*(uint16_t *)&hc->MiscEfxData[0] = hc->EfxMem_EFG << 2;
 		hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON; // call update only if necess.
 		return;
 	}
 
-	if ((hc->EFG & 0x0F) == 0)
+	if ((hc->EfxMem_EFG & 0x0F) == 0)
 		return;
 
-	uint16_t SlideVal = hc->EFG & 0x0F;
-	if ((hc->EFG & 0xF0) != 0xE0)
+	uint16_t SlideVal = hc->EfxMem_EFG & 0x0F;
+	if ((hc->EfxMem_EFG & 0xF0) != 0xE0)
 		SlideVal <<= 2;
 
 	slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
@@ -659,7 +656,7 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx (8bb: and normal
 	{
 		// OK. Time to calc freq.
 
-		if (hc->TranslatedNote <= 119)
+		if (hc->TranslatedNote < 120)
 		{
 			// Don't overwrite note if MIDI!
 			if (hc->Smp != 101)
@@ -719,12 +716,7 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx (8bb: and normal
 	{
 		// Work out magnitude + dirn
 
-		uint16_t SlideSpeed;
-		if (Song.Header.Flags & ITF_COMPAT_GXX) // Command G memory
-			SlideSpeed = hc->GOE << 2;
-		else
-			SlideSpeed = hc->EFG << 2;
-
+		uint16_t SlideSpeed = (Song.Header.Flags & ITF_COMPAT_GXX) ? (hc->EfxMem_G_Compat << 2) : (hc->EfxMem_EFG << 2);
 		if (SlideSpeed > 0)
 		{
 			*(uint16_t *)&hc->MiscEfxData[0] = SlideSpeed;
@@ -752,9 +744,9 @@ void InitCommandG(hostChn_t *hc)
 	if (hc->CmdVal != 0)
 	{
 		if (Song.Header.Flags & ITF_COMPAT_GXX) // Compatibility Gxx?
-			hc->GOE = hc->CmdVal;
+			hc->EfxMem_G_Compat = hc->CmdVal;
 		else
-			hc->EFG = hc->CmdVal;
+			hc->EfxMem_EFG = hc->CmdVal;
 	}
 
 	if (!(hc->Flags & HF_CHAN_ON))
@@ -768,7 +760,7 @@ void InitCommandG(hostChn_t *hc)
 
 void InitCommandH(hostChn_t *hc)
 {
-	if ((hc->NotePackMask & 0x11) && hc->RawNote <= 119)
+	if ((hc->NotePackMask & 0x11) && hc->RawNote < 120)
 		hc->VibratoPos = hc->LastVibratoData = 0;
 
 	uint8_t speed = (hc->CmdVal >> 4) << 2;
@@ -800,14 +792,14 @@ void InitCommandI(hostChn_t *hc)
 
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal > 0)
-		hc->I00 = CmdVal;
+		hc->EfxMem_I = CmdVal;
 
 	if (hc->Flags & HF_CHAN_ON)
 	{
 		hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON;
 
-		uint8_t OffTime = hc->I00 & 0x0F;
-		uint8_t OnTime = hc->I00 >> 4;
+		uint8_t OffTime = hc->EfxMem_I & 0x0F;
+		uint8_t OnTime = hc->EfxMem_I >> 4;
 		
 		if (Song.Header.Flags & ITF_OLD_EFFECTS)
 		{
@@ -830,9 +822,9 @@ void InitCommandJ(hostChn_t *hc)
 
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal == 0)
-		CmdVal = hc->J00;
+		CmdVal = hc->EfxMem_J;
 
-	hc->J00 = CmdVal;
+	hc->EfxMem_J = CmdVal;
 
 	if (hc->Flags & HF_CHAN_ON)
 	{
@@ -842,15 +834,15 @@ void InitCommandJ(hostChn_t *hc)
 		** but we store notes instead because we work with bigger pointer sizes.
 		** The outcome is the same.
 		*/
-		*(uint16_t *)&hc->MiscEfxData[2] = 60 + (hc->J00 >> 4);   // 8bb: Tick 1 note
-		*(uint16_t *)&hc->MiscEfxData[4] = 60 + (hc->J00 & 0x0F); // 8bb: Tick 2 note
+		*(uint16_t *)&hc->MiscEfxData[2] = 60 + (hc->EfxMem_J >> 4);   // 8bb: Tick 1 note
+		*(uint16_t *)&hc->MiscEfxData[4] = 60 + (hc->EfxMem_J & 0x0F); // 8bb: Tick 2 note
 	}
 }
 
 void InitCommandK(hostChn_t *hc)
 {
 	if (hc->CmdVal > 0)
-		hc->DKL = hc->CmdVal;
+		hc->EfxMem_DKL = hc->CmdVal;
 
 	InitNoCommand(hc);
 
@@ -867,7 +859,7 @@ void InitCommandL(hostChn_t *hc)
 {
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal > 0)
-		hc->DKL = CmdVal;
+		hc->EfxMem_DKL = CmdVal;
 
 	if (hc->Flags & HF_CHAN_ON)
 	{
@@ -900,12 +892,12 @@ void InitCommandN(hostChn_t *hc)
 {
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal > 0)
-		hc->N00 = CmdVal;
+		hc->EfxMem_N = CmdVal;
 
 	InitNoCommand(hc);
 
-	uint8_t hi = hc->N00 & 0xF0;
-	uint8_t lo = hc->N00 & 0x0F;
+	uint8_t hi = hc->EfxMem_N & 0xF0;
+	uint8_t lo = hc->EfxMem_N & 0x0F;
 
 	if (lo == 0)
 	{
@@ -939,9 +931,9 @@ void InitCommandO(hostChn_t *hc)
 {
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal == 0)
-		CmdVal = hc->O00;
+		CmdVal = hc->EfxMem_O;
 
-	hc->O00 = CmdVal;
+	hc->EfxMem_O = CmdVal;
 
 	InitNoCommand(hc);
 
@@ -949,7 +941,7 @@ void InitCommandO(hostChn_t *hc)
 	{
 		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
-		int32_t offset = ((hc->HighSmpOffs << 8) | hc->O00) << 8;
+		int32_t offset = ((hc->HighSmpOffs << 8) | hc->EfxMem_O) << 8;
 		if (offset >= sc->LoopEnd)
 		{
 			if (!(Song.Header.Flags & ITF_OLD_EFFECTS))
@@ -968,7 +960,7 @@ void InitCommandP(hostChn_t *hc)
 {
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal > 0)
-		hc->P00 = CmdVal;
+		hc->EfxMem_P = CmdVal;
 
 	InitNoCommand(hc);
 
@@ -979,8 +971,8 @@ void InitCommandP(hostChn_t *hc)
 	if (pan == PAN_SURROUND)
 		return;
 
-	uint8_t hi = hc->P00 & 0xF0;
-	uint8_t lo = hc->P00 & 0x0F;
+	uint8_t hi = hc->EfxMem_P & 0xF0;
+	uint8_t lo = hc->EfxMem_P & 0x0F;
 
 	if (lo == 0)
 	{
@@ -1015,7 +1007,7 @@ void InitCommandQ(hostChn_t *hc)
 	InitNoCommand(hc);
 
 	if (hc->CmdVal > 0)
-		hc->Q00 = hc->CmdVal;
+		hc->EfxMem_Q = hc->CmdVal;
 
 	if (!(hc->Flags & HF_CHAN_ON))
 		return;
@@ -1023,7 +1015,7 @@ void InitCommandQ(hostChn_t *hc)
 	hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON;
 
 	if (hc->NotePackMask & 0x11)
-		hc->RetrigCount = hc->Q00 & 0x0F;
+		hc->RetrigCount = hc->EfxMem_Q & 0x0F;
 	else
 		CommandQ(hc);
 }
@@ -1067,9 +1059,9 @@ void InitCommandS(hostChn_t *hc)
 {
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal == 0)
-		CmdVal = hc->S00;
+		CmdVal = hc->EfxMem_S;
 
-	hc->S00 = CmdVal;
+	hc->EfxMem_S = CmdVal;
 
 	uint8_t cmd = CmdVal & 0xF0;
 	uint8_t val = CmdVal & 0x0F;
@@ -1344,7 +1336,7 @@ void InitCommandS(hostChn_t *hc)
 
 		case 0xF0: // MIDI Macro select
 		{
-			hc->SFx = val;
+			hc->EfxMem_SFx = val;
 			InitNoCommand(hc);
 		}
 		break;
@@ -1355,9 +1347,9 @@ void InitCommandT(hostChn_t *hc)
 {
 	uint8_t CmdVal = hc->CmdVal;
 	if (CmdVal == 0)
-		CmdVal = hc->T00;
+		CmdVal = hc->EfxMem_T;
 
-	hc->T00 = CmdVal;
+	hc->EfxMem_T = CmdVal;
 
 	if (CmdVal >= 0x20)
 	{
@@ -1416,13 +1408,13 @@ void InitCommandW(hostChn_t *hc)
 	InitNoCommand(hc);
 
 	if (hc->CmdVal > 0)
-		hc->W00 = hc->CmdVal;
+		hc->EfxMem_W = hc->CmdVal;
 
-	if (hc->W00 == 0)
+	if (hc->EfxMem_W == 0)
 		return;
 
-	uint8_t hi = hc->W00 & 0xF0;
-	uint8_t lo = hc->W00 & 0x0F;
+	uint8_t hi = hc->EfxMem_W & 0xF0;
+	uint8_t lo = hc->EfxMem_W & 0x0F;
 
 	if (lo == 0)
 	{
@@ -1503,7 +1495,7 @@ void InitCommandZ(hostChn_t *hc) // Macros start at 120h, 320h
 	if (hc->CmdVal >= 0x80) // Macros!
 		MIDITranslate(hc, sc, 0x320 + ((hc->CmdVal & 0x7F) << 5));
 	else
-		MIDITranslate(hc, sc, 0x120 + ((hc->SFx & 0xF) << 5));
+		MIDITranslate(hc, sc, 0x120 + ((hc->EfxMem_SFx & 0xF) << 5));
 }
 
 void CommandD(hostChn_t *hc)
@@ -1709,7 +1701,7 @@ void CommandQ(hostChn_t *hc)
 		return;
 
 	// OK... reset counter.
-	hc->RetrigCount = hc->Q00 & 0x0F;
+	hc->RetrigCount = hc->EfxMem_Q & 0x0F;
 
 	// retrig count done.
 
@@ -1749,7 +1741,7 @@ void CommandQ(hostChn_t *hc)
 	sc->Flags |= (SF_RECALC_FINALVOL | SF_NEW_NOTE | SF_LOOP_CHANGED);
 
 	uint8_t vol = sc->VolSet;
-	switch (hc->Q00 >> 4)
+	switch (hc->EfxMem_Q >> 4)
 	{
 		default:
 		case 0x0: return;
@@ -1855,17 +1847,17 @@ void CommandT(hostChn_t *hc)
 {
 	int16_t Tempo = Song.Tempo;
 
-	if (hc->T00 & 0xF0)
+	if (hc->EfxMem_T & 0xF0)
 	{
 		// Slide Up
-		Tempo += hc->T00 - 16;
+		Tempo += hc->EfxMem_T - 16;
 		if (Tempo > 255)
 			Tempo = 255;
 	}
 	else
 	{
 		// Slide Down
-		Tempo -= hc->T00;
+		Tempo -= hc->EfxMem_T;
 		if (Tempo < 32)
 			Tempo = 32;
 	}

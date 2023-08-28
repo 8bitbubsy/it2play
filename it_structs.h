@@ -145,7 +145,8 @@ typedef struct hostChn_t
 	uint16_t Flags;
 	uint8_t NotePackMask, RawNote, Ins, RawVolColumn, Cmd, CmdVal, OldCmd, OldCmdVal, VolCmd, VolCmdVal;
 	uint8_t MIDIChn, MIDIProg, TranslatedNote, Smp;
-	uint8_t DKL, EFG, O00, I00, J00, M00, N00, P00, Q00, T00, S00, W00, GOE, SFx;
+	uint8_t EfxMem_DKL, EfxMem_EFG, EfxMem_O, EfxMem_I, EfxMem_J, EfxMem_N, EfxMem_P;
+	uint8_t EfxMem_Q, EfxMem_T, EfxMem_S, EfxMem_W, EfxMem_G_Compat, EfxMem_SFx;
 	uint8_t HighSmpOffs;
 	uint8_t HostChnNum, VolSet;
 	void *SlaveChnPtr;

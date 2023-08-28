@@ -365,7 +365,7 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 		}
 		else if (Byte == 'o'-'a') // 8bb: sample offset?
 		{
-			MIDISendFilter(hc, sc, hc->O00);
+			MIDISendFilter(hc, sc, hc->EfxMem_O);
 		}
 		else if (sc != NULL)
 		{
@@ -1639,7 +1639,7 @@ static bool UpdateEnvelope(env_t *env, envState_t *envState, bool SustainRelease
 	envState->Value = Nodes[envState->CurNode & 0x00FF].Magnitude << 16;
 	int16_t NextNode = (envState->CurNode & 0x00FF) + 1;
 
-	if (env->Flags & 6) // 8bb: any loop at all?
+	if (env->Flags & (ENVF_LOOP | ENVF_SUSTAINLOOP)) // 8bb: any loop at all?
 	{
 		uint8_t LoopBegin = env->LoopBegin;
 		uint8_t LoopEnd = env->LoopEnd;
