@@ -247,8 +247,7 @@ static void SB16MMX_MixSamples(void)
 			** MixOffset 3 = Interpolation, volume ramp, filtering
 			** MixOffset 4 = Use position update routine (zero volume)
 			*/
-			const bool Sample16Bit = !!(sc->SmpBitDepth & SMPF_16BIT);
-			mixFunc Mix = SB16MMX_MixFunctionTables[(sc->MixOffset << 1) + Sample16Bit];
+			mixFunc Mix = SB16MMX_MixFunctionTables[(sc->MixOffset << 1) + sc->SmpIs16Bit];
 			assert(Mix != NULL);
 
 			// 8bb: pre-mix routine

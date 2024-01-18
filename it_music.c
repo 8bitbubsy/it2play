@@ -593,7 +593,7 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 		sc->Smp = hc->Smp - 1;
 		sample_t *s = sc->SmpPtr = &Song.Smp[sc->Smp];
 
-		sc->SmpBitDepth = 0; // 8bb: 8-bit
+		sc->SmpIs16Bit = false;
 		sc->AutoVibratoDepth = sc->AutoVibratoPos = 0;
 		sc->PanEnvState.Value &= 0xFFFF; // No pan deviation (8bb: keeps frac)
 		sc->PitchEnvState.Value &= 0xFFFF; // No pitch deviation (8bb: keeps frac)
@@ -606,7 +606,7 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 			return NULL;
 		}
 
-		sc->SmpBitDepth = s->Flags & SMPF_16BIT;
+		sc->SmpIs16Bit = !!(s->Flags & SMPF_16BIT);
 		sc->SmpVol = s->GlobVol * 2;
 		return sc;
 	}
@@ -627,7 +627,7 @@ static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, inst
 	sc->HostChnNum = hc->HostChnNum;
 	sc->HostChnPtr = hc;
 
-	sc->SmpBitDepth = 0; // 8bb: 8-bit
+	sc->SmpIs16Bit = false;
 	sc->AutoVibratoDepth = sc->AutoVibratoPos = 0;
 	sc->LoopDirection = DIR_FORWARDS; // Reset loop dirn
 
@@ -657,7 +657,7 @@ static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, inst
 		return NULL;
 	}
 
-	sc->SmpBitDepth = s->Flags & SMPF_16BIT;
+	sc->SmpIs16Bit = !!(s->Flags & SMPF_16BIT);
 	sc->SmpVol = (s->GlobVol * sc->SmpVol) >> 6; // 0->128
 	return sc;
 }

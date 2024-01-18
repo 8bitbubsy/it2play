@@ -203,8 +203,7 @@ static void WAVWriter_MixSamples(void)
 		else // 8bb: regular mixing
 		{
 			const bool Surround = (sc->FinalPan == PAN_SURROUND);
-			const bool Sample16Bit = !!(sc->SmpBitDepth & SMPF_16BIT);
-			mixFunc Mix = WAVWriter_MixFunctionTables[(Surround << 1) + Sample16Bit];
+			mixFunc Mix = WAVWriter_MixFunctionTables[(Surround << 1) + sc->SmpIs16Bit];
 			assert(Mix != NULL);
 
 			// 8bb: prepare volume ramp

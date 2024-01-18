@@ -170,12 +170,13 @@ typedef struct envState_t
 
 typedef struct slaveChn_t
 {
+	bool SmpIs16Bit;
 	uint16_t Flags;
 	uint32_t MixOffset; // 8bb: which sample mix function to use
 	uint8_t LoopMode, LoopDirection;
 	int32_t LeftVolume, RightVolume;
 	int32_t Frequency, FrequencySet;
-	uint8_t SmpBitDepth, AutoVibratoPos;
+	uint8_t AutoVibratoPos;
 	uint16_t AutoVibratoDepth;
 	int32_t OldLeftVolume, OldRightVolume;
 	uint8_t FinalVol128, Vol, VolSet, ChnVol, SmpVol, FinalPan;

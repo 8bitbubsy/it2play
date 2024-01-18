@@ -191,10 +191,9 @@ static void HQ_MixSamples(void)
 		uint32_t MixBlockSize = RealBytesToMix;
 
 		const bool Surround = (sc->FinalPan == PAN_SURROUND);
-		const bool Sample16Bit = !!(sc->SmpBitDepth & SMPF_16BIT);
 		const bool Stereo = !!(s->Flags & SMPF_STEREO);
 		const bool FilterActive = (sc->fFilterb > 0.0f) || (sc->fFilterc > 0.0f);
-		MixFunc_t Mix = HQ_MixFunctionTables[(FilterActive << 3) + (Stereo << 2) + (Surround << 1) + Sample16Bit];
+		MixFunc_t Mix = HQ_MixFunctionTables[(FilterActive << 3) + (Stereo << 2) + (Surround << 1) + sc->SmpIs16Bit];
 		assert(Mix != NULL);
 
 		const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin; // also actual length for non-loopers

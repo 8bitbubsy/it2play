@@ -584,7 +584,7 @@ static bool Gxx_ChangeSample(hostChn_t *hc, slaveChn_t *sc, uint8_t sample)
 		return false;
 	}
 
-	sc->SmpBitDepth = s->Flags & SMPF_16BIT;
+	sc->SmpIs16Bit = !!(s->Flags & SMPF_16BIT);
 	GetLoopInformation(sc);
 
 	return true;

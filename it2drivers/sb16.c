@@ -97,8 +97,7 @@ static void SB16_MixSamples(void)
 		}
 
 		const bool Surround = (sc->FinalPan == PAN_SURROUND);
-		const bool Sample16it = !!(sc->SmpBitDepth & SMPF_16BIT);
-		const mixFunc Mix = SB16_MixFunctionTables[(Driver.MixMode << 2) + (Surround << 1) + Sample16it];
+		const mixFunc Mix = SB16_MixFunctionTables[(Driver.MixMode << 2) + (Surround << 1) + sc->SmpIs16Bit];
 		int32_t *MixBufferPtr = MixBuffer;
 
 		if ((int32_t)LoopLength > 0)
