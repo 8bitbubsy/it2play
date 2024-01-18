@@ -816,18 +816,14 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 
 			if (ins->DCT == DCT_NOTE)
 			{
-				DCVal = hc->RawNote; // 8bb: not the translated note!
+				DCVal = hc->RawNote; // 8bb: yes, raw note, not the translated note!
 			}
 			else if (ins->DCT == DCT_INSTRUMENT)
 			{
 				DCVal = hc->Ins;
 			}
-			else
+			else // 8bb: DCT_SAMPLE (or any other number, like DCT=4 from OpenMPT, which is unsupported)
 			{
-				/* 8bb:
-				** .ITs from OpenMPT can have DCT=4, which tests for duplicate instrument plugins.
-				** This will be handled as DCT_SAMPLE in Impulse Tracker. Oops...
-				*/
 				DCVal = hc->Smp - 1;
 				if ((int8_t)DCVal < 0)
 					break; // 8bb: illegal (or no) sample, ignore dupe test and find available voice now
@@ -1022,7 +1018,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		ChannelCountTable[hostChnNum & 63] = 0; // Next cycle...
 	}
 
-	// 8bb: we have a slave channel in sc at this point
+	// 8bb: we have a target slave channel in sc at this point
 
 	lowestVol = 255;
 
@@ -1165,7 +1161,7 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 		// 8bb: added this, needed to make it work in extreme edge cases
 		if (dFreqDiv <= 0.0)
-			dFreqDiv = 1e-9; // 8bb: any tiny positive number
+			dFreqDiv = 1e-9; // 8bb: any tiny number (positive)
 
 		sc->Flags |= SF_FREQ_CHANGE; // recalculate pitch!
 
@@ -1504,7 +1500,7 @@ static void UpdateNoteData(void)
 
 static void UpdateData(void)
 {
-	// 8bb: I only added the logic for "Play Song" (2) mode
+	// 8bb: I only ported the logic for "Play Song" mode (mode=2)
 
 	Song.ProcessTick--;
 	Song.CurrentTick--;
@@ -1727,7 +1723,7 @@ static void UpdateInstruments(void)
 				EnvVal >>= 6; // 8bb: arithmetic shift, -128..128 (though -512..511 is in theory possible)
 
 				/*
-				** 8bb: Some annoying logic.
+				** 8bb: Annoying upper-clamp logic.
 				**
 				** Original asm code:
 				**  add bx,128
@@ -1739,7 +1735,8 @@ static void UpdateInstruments(void)
 				**
 				** However, EnvVal should only be -128..128
 				** (0..256 after +128 add) unless something
-				** nasty is going on.
+				** nasty is going on. Let's still implement
+				** this behavior, just in case.
 				*/
 				EnvVal += 128;
 				if (EnvVal & 0xFF00)
