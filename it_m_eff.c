@@ -70,7 +70,7 @@ static void InitCommandD7(hostChn_t *hc, slaveChn_t *sc) // Jmp point for Lxx (8
 		hc->VolSlideDelta = hi >> 4;
 		hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON;
 
-		if (hc->VolSlideDelta == 0x0F)
+		if (hc->VolSlideDelta == 15)
 			CommandD(hc);
 	}
 	else if (hi == 0)
@@ -687,7 +687,7 @@ static void InitCommandG11(hostChn_t *hc) // Jumped to from Lxx (8bb: and normal
 	}
 
 	bool volFromVolColumn = false;
-	uint8_t vol = 0; // 8bb: set to 0, just to make the compiler happy..
+	uint8_t vol = 0; // 8bb: pre-initialize to prevent compiler warnings
 
 	if (hc->NotePackMask & 0x44)
 	{
@@ -1020,7 +1020,7 @@ void InitCommandQ(hostChn_t *hc)
 		CommandQ(hc);
 }
 
-static void InitTremelo(hostChn_t *hc)
+static void InitTremolo(hostChn_t *hc)
 {
 	if (Song.Header.Flags & ITF_OLD_EFFECTS)
 	{
@@ -1051,7 +1051,7 @@ void InitCommandR(hostChn_t *hc)
 	if (hc->Flags & HF_CHAN_ON)
 	{
 		hc->Flags |= HF_UPDATE_EFX_IF_CHAN_ON;
-		InitTremelo(hc);
+		InitTremolo(hc);
 	}
 }
 
@@ -1087,7 +1087,7 @@ void InitCommandS(hostChn_t *hc)
 		}
 		break;
 
-		case 0x40: // set tremelo waveform
+		case 0x40: // set tremolo waveform
 		{
 			if (val <= 3)
 				hc->TremoloWaveform = val;
@@ -1800,7 +1800,7 @@ void CommandR(hostChn_t *hc)
 	else
 		TremoloData = FineSineData[(hc->TremoloWaveform << 8) + hc->TremoloPos];
 
-	hc->LastTremoloData = TremoloData; // Save last tremelo
+	hc->LastTremoloData = TremoloData; // Save last tremolo
 	CommandR2(hc, sc, TremoloData);
 }
 
