@@ -1,5 +1,5 @@
 /* Bit-accurate IT2 tables. Copied from IT2 source code.
-** All of the comments in this file are written by me (8bitbubsy)
+** All of the comments in this file are written by myself (8bitbubsy)
 */
 
 #include <stdint.h>
