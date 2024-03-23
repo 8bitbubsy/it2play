@@ -16,7 +16,7 @@
 #define DEFAULT_WAVRENDER_MODE_FLAG false
 
 // defaults when not overriden by argument switches
-#define DEFAULT_MIX_FREQ 44100
+#define DEFAULT_MIX_FREQ 48000
 
 #define DEFAULT_MIX_BUFSIZE 1024
 #define DEFAULT_DRIVER DRIVER_HQ
