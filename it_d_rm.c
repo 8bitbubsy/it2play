@@ -2,8 +2,8 @@
 ** 8bb: IT2 module loading routines
 **
 ** NOTE: This file is not directly ported from the IT2 code,
-**       so routines have non-original names. All comments in
-**       this file are by me (8bitbubsy).
+**       which means that all the routines have non-original names.
+**       All comments in this file are by myself (8bitbubsy).
 */
 
 // for finding memory leaks in debug mode with Visual Studio
