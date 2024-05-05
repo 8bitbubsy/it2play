@@ -73,6 +73,9 @@ void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 			if (NewLoopPos >= LoopLength)
 			{
 				sc->SamplingPosition = (sc->LoopEnd - 1) + (LoopLength - NewLoopPos);
+
+				if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
+					sc->SamplingPosition = sc->LoopBegin + 1;
 			}
 			else
 			{
@@ -101,6 +104,9 @@ void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 				sc->LoopDirection = DIR_BACKWARDS;
 				sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
 				sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+
+				if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
+					sc->SamplingPosition = sc->LoopBegin + 1;
 			}
 		}
 	}

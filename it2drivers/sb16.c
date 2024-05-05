@@ -36,7 +36,8 @@ static void SB16_MixSamples(void)
 
 		if (sc->Flags & SF_FREQ_CHANGE)
 		{
-			if ((uint32_t)sc->Frequency>>MIX_FRAC_BITS >= Driver.MixSpeed)
+			if ((uint32_t)sc->Frequency>>MIX_FRAC_BITS >= Driver.MixSpeed ||
+				(uint32_t)sc->Frequency >= INT32_MAX/2) // 8bb: non-IT2 limit, but required for safety
 			{
 				sc->Flags = SF_NOTE_STOP;
 				if (!(sc->HostChnNum & CHN_DISOWNED))
@@ -115,6 +116,9 @@ static void SB16_MixSamples(void)
 							if (NewLoopPos >= LoopLength)
 							{
 								sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
+
+								if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
+									sc->SamplingPosition = sc->LoopBegin + 1;
 							}
 							else
 							{
@@ -136,8 +140,11 @@ static void SB16_MixSamples(void)
 							else
 							{
 								sc->LoopDirection = DIR_BACKWARDS;
-								sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
 								sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+								sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
+
+								if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
+									sc->SamplingPosition = sc->LoopBegin + 1;
 							}
 						}
 					}

@@ -108,7 +108,7 @@ static void HQ_MixSamples(void)
 
 		if (sc->Flags & SF_FREQ_CHANGE)
 		{
-			if ((uint32_t)sc->Frequency > INT32_MAX) // this is my own max limit in this driver
+			if ((uint32_t)sc->Frequency >= INT32_MAX/2) // non-IT2 limit, but required for safety
 			{
 				sc->Flags = SF_NOTE_STOP;
 				if (!(sc->HostChnNum & CHN_DISOWNED))
@@ -204,9 +204,8 @@ static void HQ_MixSamples(void)
 			{
 				while (MixBlockSize > 0)
 				{
-					uint32_t NewLoopPos;
+					uint32_t NewLoopPos, SamplesToMix;
 
-					uint32_t SamplesToMix;
 					if (sc->LoopDirection == DIR_BACKWARDS)
 					{
 						SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
@@ -238,6 +237,9 @@ static void HQ_MixSamples(void)
 							if (NewLoopPos >= LoopLength)
 							{
 								sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
+
+								if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
+									sc->SamplingPosition = sc->LoopBegin + 1;
 							}
 							else
 							{
@@ -261,6 +263,9 @@ static void HQ_MixSamples(void)
 								sc->LoopDirection = DIR_BACKWARDS;
 								sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
 								sc->Frac64 = (uint32_t)(0 - sc->Frac64);
+
+								if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
+									sc->SamplingPosition = sc->LoopBegin + 1;
 							}
 						}
 					}
