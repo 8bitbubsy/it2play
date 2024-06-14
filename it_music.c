@@ -846,7 +846,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 				}
 				else
 				{
-					sc->DCT = DCT_DISABLED; // 8bb: turn of dupe check so that we don't do infinite NNA tests :)
+					sc->DCT = DCT_DISABLED; // 8bb: turn off dupe check to prevent further NNA testing
 					sc->DCA = DCA_NOTE_CUT;
 					NNA = ins->DCA + 1;
 				}
