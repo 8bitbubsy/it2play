@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "../../cpu.h"
 #include "../../it_d_rm.h"
 #include "../../it_music.h"
 #include "../../it_structs.h"
@@ -144,8 +145,11 @@ int main(int argc, char *argv[])
 
 	Music_PlaySong(0);
 
-	printf("Press ESC to stop...\n");
-	printf("\n");
+	printf("Press ESC to stop...");
+#if CPU_32BIT
+	printf(" (note: 32-bit. Compile for 64-bit for higher precision!)");
+#endif
+	printf("\n\n");
 	printf("Controls:\n");
 	printf(" Esc=Quit   Plus = inc. song pos   Minus = dec. song pos\n");
 	printf("\n");
@@ -158,7 +162,7 @@ int main(int argc, char *argv[])
 	printf("\n");
 	printf("Stereo mode: %s\n", (Song.Header.Flags & ITF_STEREO) ? "Yes" : "No");
 	printf("Mixing volume: %d/128\n", Song.Header.MixVolume);
-	printf("Mixing frequency: %dHz\n", mixingFrequency);
+	printf("Mixing frequency: %dHz\n", Driver.MixSpeed);
 	printf("IT2 sound driver: %s\n",
 		(IT2SoundDriver == DRIVER_WAVWRITER) ? "WAV writer (v2.15 registered)" :
 		(IT2SoundDriver == DRIVER_SB16MMX)   ? "SB16 MMX" :
@@ -192,7 +196,11 @@ int main(int argc, char *argv[])
 			activeVoices, peakVoices);
 		fflush(stdout);
 
+#if CPU_32BIT
+		Sleep(35);
+#else
 		Sleep(25);
+#endif
 	}
 
 #ifndef _WIN32

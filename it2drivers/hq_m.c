@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include "../cpu.h"
 #include "../it_structs.h"
 #include "../it_music.h"
 #include "hq.h"
@@ -49,6 +50,28 @@ static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, in
 	sc->fOldSamples[3] = sc->fOldSamples[2]; \
 	sc->fOldSamples[2] = fSampleR;
 
+#if CPU_32BIT
+
+#define Get8BitWaveForm \
+	t = (float *)Driver.fCubicLUT + (((uint16_t)sc->Frac32 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
+	CubicSplineInterpolation(fSample, smp, t, 128.0f); \
+
+#define Get16BitWaveForm \
+	t = (float *)Driver.fCubicLUT + (((uint16_t)sc->Frac32 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
+	CubicSplineInterpolation(fSample, smp, t, 32768.0f); \
+
+#define Get8BitStereoWaveForm \
+	t = (float *)Driver.fCubicLUT + (((uint16_t)sc->Frac32 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
+	CubicSplineInterpolation(fSample,  smp,  t, 128.0f); \
+	CubicSplineInterpolation(fSampleR, smpR, t, 128.0f);
+
+#define Get16BitStereoWaveForm \
+	t = (float *)Driver.fCubicLUT + (((uint16_t)sc->Frac32 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
+	CubicSplineInterpolation(fSample,  smp,  t, 32768.0f); \
+	CubicSplineInterpolation(fSampleR, smpR, t, 32768.0f);
+
+#else
+
 #define Get8BitWaveForm \
 	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
 	CubicSplineInterpolation(fSample, smp, t, 128.0f); \
@@ -66,6 +89,8 @@ static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, in
 	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
 	CubicSplineInterpolation(fSample,  smp,  t, 32768.0f); \
 	CubicSplineInterpolation(fSampleR, smpR, t, 32768.0f);
+
+#endif
 
 #define GetFiltered8BitWaveForm \
 	Get8BitWaveForm \
@@ -116,6 +141,22 @@ static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, in
 #define RampCurrVolumeR \
 	sc->fCurrVolR += (sc->fRightVolume - sc->fCurrVolR) * ((1 << RAMPSPEED) / 16384.0f);
 
+#if CPU_32BIT
+
+#define UpdatePos \
+	sc->Frac32 += Driver.Delta32; \
+	smp += (int32_t)sc->Frac32 >> 16; \
+	sc->Frac32 &= UINT16_MAX;
+
+#define UpdatePosStereo \
+	sc->Frac32 += Driver.Delta32; \
+	WholeSamples = (int32_t)sc->Frac32 >> 16; \
+	smp += WholeSamples; \
+	smpR += WholeSamples; \
+	sc->Frac32 &= UINT16_MAX;
+
+#else
+
 #define UpdatePos \
 	sc->Frac64 += Driver.Delta64; \
 	smp += (int64_t)sc->Frac64 >> 32; \
@@ -127,6 +168,8 @@ static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, in
 	smp += WholeSamples; \
 	smpR += WholeSamples; \
 	sc->Frac64 &= UINT32_MAX;
+
+#endif
 
 #define Mix8Bit_M \
 	Get8BitWaveForm \
