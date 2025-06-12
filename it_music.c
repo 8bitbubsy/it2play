@@ -137,6 +137,7 @@ void Music_SetDefaultMIDIDataArea(void) // 8bb: added this
 	memcpy(&MIDIDataArea[1*32], "FC", 2);
 	memcpy(&MIDIDataArea[3*32], "9c n v", 6);
 	memcpy(&MIDIDataArea[4*32], "9c n 0", 6);
+	memcpy(&MIDIDataArea[7*32], "Bc 0 a 20 b", 11);
 	memcpy(&MIDIDataArea[8*32], "Cc p", 4);
 
 	// macro setup (SF0)
@@ -386,14 +387,14 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 				else
 				{
 					uint16_t volume = (sc->VolSet * Song.GlobalVolume * sc->ChnVol) >> 4;
-					volume = (volume * sc->SmpVol) >> 15;
+					uint8_t value = (volume * sc->SmpVol) >> 15;
 
-					if (volume == 0)
-						volume = 1;
-					else if (volume >= 128)
-						volume = 127;
+					if (value == 0)
+						value = 1;
+					else if (value >= 128)
+						value--;
 
-					MIDISendFilter(hc, sc, (uint8_t)volume);
+					MIDISendFilter(hc, sc, value);
 				}
 			}
 			else if (Byte == 'u'-'a') // Volume?
@@ -404,14 +405,14 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 				}
 				else
 				{
-					uint16_t volume = sc->FinalVol128;
+					uint8_t value = sc->FinalVol128;
 
-					if (volume == 0)
-						volume = 1;
-					else if (volume >= 128)
-						volume = 127;
+					if (value == 0)
+						value = 1;
+					else if (value >= 128)
+						value--;
 
-					MIDISendFilter(hc, sc, (uint8_t)volume);
+					MIDISendFilter(hc, sc, value);
 				}
 			}
 			else if (Byte == 'h'-'a') // HCN (8bb: host channel number)
@@ -420,14 +421,14 @@ void MIDITranslate(hostChn_t *hc, slaveChn_t *sc, uint16_t Input)
 			}
 			else if (Byte == 'x'-'a') // Pan set
 			{
-				uint16_t value = sc->Pan * 2; // 8bb: yes sc->Pan, not sc->PS
+				uint8_t value = (uint8_t)(sc->Pan * 2); // 8bb: yes, sc->Pan (not sc->PanSet)
 				if (value >= 128)
 					value--;
 
 				if (value >= 128)
 					value = 64;
 
-				MIDISendFilter(hc, sc, (uint8_t)value);
+				MIDISendFilter(hc, sc, value);
 			}
 			else if (Byte == 'p'-'a') // Program?
 			{
