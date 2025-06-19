@@ -101,7 +101,7 @@ const uint32_t FineLinearSlideUpTable[16] =
 **     LUT[i] = round(pow(2.0, i / 192.0) * 65536.0);
 **
 ** Note:
-**  The following entries have unexplainable errors: 21,35,108,152,201,243
+**  The following indices have unexplainable errors: 21,35,108,152,201,243
 */
 const uint32_t LinearSlideUpTable[257] =
 {
@@ -151,7 +151,7 @@ const uint32_t LinearSlideUpTable[257] =
 ** }
 **
 ** Note:
-**  The following entries have unexplainable errors: 7,11,15
+**  The following indices have unexplainable errors: 7,11,15
 */
 const uint16_t FineLinearSlideDownTable[16] =
 {
@@ -170,7 +170,7 @@ const uint16_t FineLinearSlideDownTable[16] =
 ** }
 **
 ** Note:
-**  The following entries have unexplainable errors: 85,132,133,135,214
+**  The following indices have unexplainable errors: 85,132,133,135,214
 */
 const uint16_t LinearSlideDownTable[257] =
 {
