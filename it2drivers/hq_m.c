@@ -23,8 +23,15 @@ static void MixFiltered16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t nu
 static void MixFilteredSurround8BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t numSamples);
 static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, int32_t numSamples);
 
-#define CubicSplineInterpolation(out, s, t, scale) \
-	out = ((s[-1] * t[0]) + (s[0] * t[1]) + (s[1] * t[2]) + (s[2] * t[3])) * (1.0f / scale);
+#define SincInterpolation(out, s, t, scale) \
+	out = ((s[-3] * t[0]) + \
+	       (s[-2] * t[1]) + \
+	       (s[-1] * t[2]) + \
+	       ( s[0] * t[3]) + \
+	       ( s[1] * t[4]) + \
+	       ( s[2] * t[5]) + \
+	       ( s[3] * t[6]) + \
+	       ( s[4] * t[7])) * (1.0f / scale);
 
 #define FilterSample \
 	fSample = (fSample * sc->fFiltera) + (sc->fOldSamples[0] * sc->fFilterb) + (sc->fOldSamples[1] * sc->fFilterc); \
@@ -53,42 +60,42 @@ static void MixFilteredSurround16BitStereo(slaveChn_t *sc, float *fMixBufPtr, in
 #if CPU_32BIT
 
 #define Get8BitWaveForm \
-	t = (float *)Driver.fCubicLUT + (((uint16_t)sc->Frac32 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
-	CubicSplineInterpolation(fSample, smp, t, 128.0f); \
+	t = (float *)Driver.fSincLUT + (((uint16_t)sc->Frac32 >> SINC_FSHIFT) & SINC_FMASK); \
+	SincInterpolation(fSample, smp, t, 128.0f); \
 
 #define Get16BitWaveForm \
-	t = (float *)Driver.fCubicLUT + (((uint16_t)sc->Frac32 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
-	CubicSplineInterpolation(fSample, smp, t, 32768.0f); \
+	t = (float *)Driver.fSincLUT + (((uint16_t)sc->Frac32 >> SINC_FSHIFT) & SINC_FMASK); \
+	SincInterpolation(fSample, smp, t, 32768.0f); \
 
 #define Get8BitStereoWaveForm \
-	t = (float *)Driver.fCubicLUT + (((uint16_t)sc->Frac32 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
-	CubicSplineInterpolation(fSample,  smp,  t, 128.0f); \
-	CubicSplineInterpolation(fSampleR, smpR, t, 128.0f);
+	t = (float *)Driver.fSincLUT + (((uint16_t)sc->Frac32 >> SINC_FSHIFT) & SINC_FMASK); \
+	SincInterpolation(fSample,  smp,  t, 128.0f); \
+	SincInterpolation(fSampleR, smpR, t, 128.0f);
 
 #define Get16BitStereoWaveForm \
-	t = (float *)Driver.fCubicLUT + (((uint16_t)sc->Frac32 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
-	CubicSplineInterpolation(fSample,  smp,  t, 32768.0f); \
-	CubicSplineInterpolation(fSampleR, smpR, t, 32768.0f);
+	t = (float *)Driver.fSincLUT + (((uint16_t)sc->Frac32 >> SINC_FSHIFT) & SINC_FMASK); \
+	SincInterpolation(fSample,  smp,  t, 32768.0f); \
+	SincInterpolation(fSampleR, smpR, t, 32768.0f);
 
 #else
 
 #define Get8BitWaveForm \
-	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
-	CubicSplineInterpolation(fSample, smp, t, 128.0f); \
+	t = (float *)Driver.fSincLUT + (((uint32_t)sc->Frac64 >> SINC_FSHIFT) & SINC_FMASK); \
+	SincInterpolation(fSample, smp, t, 128.0f); \
 
 #define Get16BitWaveForm \
-	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
-	CubicSplineInterpolation(fSample, smp, t, 32768.0f); \
+	t = (float *)Driver.fSincLUT + (((uint32_t)sc->Frac64 >> SINC_FSHIFT) & SINC_FMASK); \
+	SincInterpolation(fSample, smp, t, 32768.0f); \
 
 #define Get8BitStereoWaveForm \
-	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
-	CubicSplineInterpolation(fSample,  smp,  t, 128.0f); \
-	CubicSplineInterpolation(fSampleR, smpR, t, 128.0f);
+	t = (float *)Driver.fSincLUT + (((uint32_t)sc->Frac64 >> SINC_FSHIFT) & SINC_FMASK); \
+	SincInterpolation(fSample,  smp,  t, 128.0f); \
+	SincInterpolation(fSampleR, smpR, t, 128.0f);
 
 #define Get16BitStereoWaveForm \
-	t = (float *)Driver.fCubicLUT + (((uint32_t)sc->Frac64 >> CUBIC_FSHIFT) & CUBIC_FMASK); \
-	CubicSplineInterpolation(fSample,  smp,  t, 32768.0f); \
-	CubicSplineInterpolation(fSampleR, smpR, t, 32768.0f);
+	t = (float *)Driver.fSincLUT + (((uint32_t)sc->Frac64 >> SINC_FSHIFT) & SINC_FMASK); \
+	SincInterpolation(fSample,  smp,  t, 32768.0f); \
+	SincInterpolation(fSampleR, smpR, t, 32768.0f);
 
 #endif
 

@@ -256,13 +256,29 @@ static void WAVWriter_MixSamples(void)
 						uint32_t SamplesToMix;
 						if (sc->LoopDirection == DIR_BACKWARDS)
 						{
-							SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
+							if (sc->SamplingPosition == sc->LoopBegin)
+							{
+								sc->LoopDirection = DIR_FORWARDS;
+								sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+
+								SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 #if CPU_32BIT
-							if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
-								SamplesToMix = UINT16_MAX;
+								if (SamplesToMix > UINT16_MAX)
+									SamplesToMix = UINT16_MAX;
 #endif
-							SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
-							Driver.Delta32 = 0 - sc->Delta32;
+								SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
+								Driver.Delta32 = sc->Delta32;
+							}
+							else
+							{
+								SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
+#if CPU_32BIT
+								if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
+									SamplesToMix = UINT16_MAX;
+#endif
+								SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
+								Driver.Delta32 = 0 - sc->Delta32;
+							}
 						}
 						else // 8bb: forwards
 						{
@@ -291,9 +307,11 @@ static void WAVWriter_MixSamples(void)
 								if (NewLoopPos >= LoopLength)
 								{
 									sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
-
-									if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
-										sc->SamplingPosition = sc->LoopBegin + 1;
+									if (sc->SamplingPosition == sc->LoopBegin)
+									{
+										sc->LoopDirection = DIR_FORWARDS;
+										sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+									}
 								}
 								else
 								{
@@ -314,12 +332,12 @@ static void WAVWriter_MixSamples(void)
 								}
 								else
 								{
-									sc->LoopDirection = DIR_BACKWARDS;
 									sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
-									sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-
-									if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
-										sc->SamplingPosition = sc->LoopBegin + 1;
+									if (sc->SamplingPosition != sc->LoopBegin)
+									{
+										sc->LoopDirection = DIR_BACKWARDS;
+										sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+									}
 								}
 							}
 						}
@@ -419,10 +437,9 @@ static void WAVWriter_SetTempo(uint8_t Tempo)
 
 	/* 8bb:
 	** IT2 calculates the fractional part of "bytes to mix" here,
-	** but it does it very wrongly, so the range of BytesToMixFractional
+	** but it does it wrongly, so the range of BytesToMixFractional
 	** is 0 .. BPM-1 instead of 0 .. UINT32_MAX-1.
-	** It would take 16909320..inf replayer ticks for the fraction to
-	** overflow!
+	** We intentionally include this bug in the calculation here.
 	*/
 	BytesToMixFractional = ((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) % Tempo;
 }

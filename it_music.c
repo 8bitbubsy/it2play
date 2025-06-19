@@ -1102,6 +1102,10 @@ void GetLoopInformation(slaveChn_t *sc)
 		sc->LoopBegin = LoopBegin;
 		sc->LoopEnd = LoopEnd;
 		sc->Flags |= SF_LOOP_CHANGED;
+
+		// 8bb: for my high quality mixer
+		if (sc->SamplingPosition < sc->LoopBegin)
+			sc->HasLooped = false;
 	}
 }
 
@@ -2227,7 +2231,7 @@ bool Music_AllocateSample(uint32_t sample, uint32_t length)
 		return false;
 
 	memset((int8_t *)s->OrigData, 0, SMP_DAT_OFFSET);
-	memset((int8_t *)s->OrigData + length, 0, 32);
+	memset((int8_t *)s->OrigData + length, 0, SMP_MAX_INTRP_TAPS/2);
 
 	// 8bb: offset sample so that we can fix negative interpolation taps
 	s->Data = (int8_t *)s->OrigData + SMP_DAT_OFFSET;
@@ -2248,7 +2252,7 @@ bool Music_AllocateRightSample(uint32_t sample, uint32_t length) // 8bb: added t
 		return false;
 
 	memset((int8_t *)s->OrigDataR, 0, SMP_DAT_OFFSET);
-	memset((int8_t *)s->OrigDataR + length, 0, 32);
+	memset((int8_t *)s->OrigDataR + length, 0, SMP_MAX_INTRP_TAPS/2);
 
 	// 8bb: offset sample so that we can fix negative interpolation taps
 	s->DataR = (int8_t *)s->OrigDataR + SMP_DAT_OFFSET;

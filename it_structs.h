@@ -203,9 +203,16 @@ typedef struct slaveChn_t
 	float fOldSamples[4], fFiltera, fFilterb, fFilterc;
 
 	// 8bb: for custom HQ mixer
+	bool HasLooped;
 	float fOldLeftVolume, fOldRightVolume, fLeftVolume, fRightVolume;
 	float fDestVolL, fDestVolR, fCurrVolL, fCurrVolR;
 	uint64_t Frac64, Delta64;
+
+	// 8bb: for interpolation taps
+	int16_t leftTmpSamples16[3], rightTmpSamples16[4];
+	int8_t leftTmpSamples8[3], rightTmpSamples8[4];
+	int16_t leftTmpSamples16_R[3], rightTmpSamples16_R[4]; // 8bb: for stereo samples (R)
+	int8_t leftTmpSamples8_R[3], rightTmpSamples8_R[4];
 } slaveChn_t;
 
 typedef struct it_header_t
@@ -227,12 +234,13 @@ typedef struct // 8bb: custom struct
 	int64_t Delta64;
 	float QualityFactorTable[128], FreqParameterMultiplier, FreqMultiplier;
 
-	float *fCubicLUT, fLastLeftValue, fLastRightValue; // 8bb: for HQ driver
-
 	// 8bb: for "WAV writer" driver
 	bool StartNoRamp;
 	int32_t LastLeftValue, LastRightValue;
 	// -----------------------------
+
+	// 8bb: for HQ driver
+	float *fSincLUT, fLastLeftValue, fLastRightValue;
 } driver_t;
 
 typedef struct song_t

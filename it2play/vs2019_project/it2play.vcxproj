@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\audiodrivers\winmm\winmm.c" />
     <ClCompile Include="..\..\it2drivers\hq.c" />
+    <ClCompile Include="..\..\it2drivers\hq_fixsample.c" />
     <ClCompile Include="..\..\it2drivers\hq_m.c" />
     <ClCompile Include="..\..\it2drivers\sb16.c" />
     <ClCompile Include="..\..\it2drivers\sb16mmx.c" />
@@ -44,6 +45,7 @@
     <ClInclude Include="..\..\audiodrivers\winmm\winmm.h" />
     <ClInclude Include="..\..\cpu.h" />
     <ClInclude Include="..\..\it2drivers\hq.h" />
+    <ClInclude Include="..\..\it2drivers\hq_fixsample.h" />
     <ClInclude Include="..\..\it2drivers\hq_m.h" />
     <ClInclude Include="..\..\it2drivers\sb16.h" />
     <ClInclude Include="..\..\it2drivers\sb16mmx.h" />

@@ -6,31 +6,20 @@
 
 #define RAMPSPEED 8 /* slightly faster than SB16 MMX driver */
 
-#if CPU_32BIT
+#define SINC_WIDTH 8
+#define SINC_WIDTH_BITS 3 /* log2(SINC_WIDTH) */
 
-#define CUBIC_PHASES 4096
-#define CUBIC_PHASES_BITS 12
-
+#if CPU_32BIT /* note: mixer has 16-bit fractional precision if 32-bit */
+#define SINC_PHASES 4096
+#define SINC_PHASES_BITS 12 /* log2(SINC_PHASES) */
+#define SINC_FSHIFT (16-(SINC_PHASES_BITS+SINC_WIDTH_BITS))
 #else
-
-#define CUBIC_PHASES 8192
-#define CUBIC_PHASES_BITS 13
-
+#define SINC_PHASES 16384
+#define SINC_PHASES_BITS 14 /* log2(SINC_PHASES) */
+#define SINC_FSHIFT (32-(SINC_PHASES_BITS+SINC_WIDTH_BITS))
 #endif
 
-// don't change these!
-
-#define CUBIC_WIDTH 4
-#define CUBIC_WIDTH_BITS 2
-#define CUBIC_LUT_LEN (CUBIC_WIDTH * CUBIC_PHASES)
-
-#if CPU_32BIT
-#define CUBIC_FSHIFT (16-(CUBIC_PHASES_BITS+CUBIC_WIDTH_BITS))
-#else
-#define CUBIC_FSHIFT (32-(CUBIC_PHASES_BITS+CUBIC_WIDTH_BITS))
-#endif
-
-#define CUBIC_FMASK ((CUBIC_WIDTH*CUBIC_PHASES)-CUBIC_WIDTH)
+#define SINC_FMASK ((SINC_WIDTH*SINC_PHASES)-SINC_WIDTH)
 
 typedef void (*MixFunc_t)(slaveChn_t *sc, float *fMixBufPtr, int32_t numSamples);
 

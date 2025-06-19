@@ -71,6 +71,9 @@
     <ClCompile Include="..\..\it2drivers\hq_m.c">
       <Filter>it2drivers</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\it2drivers\hq_fixsample.c">
+      <Filter>it2drivers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\audiodrivers\winmm\winmm.h">
@@ -121,5 +124,8 @@
       <Filter>it2drivers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\cpu.h" />
+    <ClInclude Include="..\..\it2drivers\hq_fixsample.h">
+      <Filter>it2drivers</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

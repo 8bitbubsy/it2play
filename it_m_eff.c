@@ -439,6 +439,7 @@ void InitNoCommand(hostChn_t *hc)
 	sc->SamplingPosition = 0;
 	sc->Frac32 = 0; // 8bb: clear fractional sampling position
 	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
+	sc->HasLooped = false; // 8bb: for my high-quality driver/mixer
 	sc->Frequency = sc->FrequencySet = ((uint64_t)s->C5Speed * (uint32_t)PitchTable[hc->TranslatedNote]) >> 16;
 
 	hcFlags |= HF_CHAN_ON;
@@ -573,6 +574,7 @@ static bool Gxx_ChangeSample(hostChn_t *hc, slaveChn_t *sc, uint8_t sample)
 	sc->LoopDirection = 0;
 	sc->Frac32 = 0; // 8bb: reset sampling position fraction
 	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
+	sc->HasLooped = false; // 8bb: for my high-quality driver/mixer
 	sc->SamplingPosition = 0;
 	sc->SmpVol = s->GlobVol * 2;
 
@@ -1736,6 +1738,7 @@ void CommandQ(hostChn_t *hc)
 
 	sc->Frac32 = 0; // 8bb: clear sampling position fraction
 	sc->Frac64 = 0; // 8bb: also clear frac for my high-quality driver/mixer
+	sc->HasLooped = false; // 8bb: for my high-quality driver/mixer
 	sc->SamplingPosition = 0;
 
 	sc->Flags |= (SF_RECALC_FINALVOL | SF_NEW_NOTE | SF_LOOP_CHANGED);

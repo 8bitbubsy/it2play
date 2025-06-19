@@ -5,7 +5,7 @@
 ** volume ramp speed and bidi looping.
 **
 ** Features:
-** - 4-tap cubic spline interpolation
+** - 8-tap windowed-sinc interpolation
 ** - Stereo sample support
 ** - 32.32 fixed-point sampling precision (32.16 if 32-bit CPU, for speed)
 ** - Ended non-looping samples are ramped out, like the WAV writer driver
@@ -24,7 +24,10 @@
 #include "../it_structs.h"
 #include "../it_music.h" // Update()
 #include "hq_m.h"
+#include "hq_fixsample.h"
 #include "zerovol.h"
+
+#define PI 3.14159265358979323846264338327950288
 
 // fast 32-bit -> 16-bit clamp
 #define CLAMP16(i) if ((int16_t)i != i) i = INT16_MAX ^ ((int32_t)i >> 31)
@@ -38,25 +41,71 @@ static int32_t RealBytesToMix, BytesToMix, MixTransferRemaining, MixTransferOffs
 static uint32_t BytesToMixFractional, CurrentFractional, RandSeed;
 static uint32_t SamplesPerTickInt[256-LOWEST_BPM_POSSIBLE], SamplesPerTickFrac[256-LOWEST_BPM_POSSIBLE];
 static float *fMixBuffer, fLastClickRemovalLeft, fLastClickRemovalRight;
-static double dFreq2DeltaMul, dPrngStateL, dPrngStateR;
+static double dFreq2DeltaMul;
+#if !CPU_32BIT
+static double dPrngStateL, dPrngStateR;
+#endif
 
-static bool InitCubicSplineLUT(void)
+// zeroth-order modified Bessel function of the first kind (series approximation)
+static inline double besselI0(double z)
 {
-	Driver.fCubicLUT = (float *)malloc(CUBIC_PHASES * CUBIC_WIDTH * sizeof (float));
-	if (Driver.fCubicLUT == NULL)
+#define EPSILON (1E-12) /* verified: lower than this makes no change when LUT output is single-precision float */
+
+	double s = 1.0, ds = 1.0, d = 2.0;
+	const double zz = z * z;
+
+	do
+	{
+		ds *= zz / (d * d);
+		s += ds;
+		d += 2.0;
+	}
+	while (ds > s*EPSILON);
+
+	return s;
+}
+
+static inline double sinc(double x)
+{
+	if (x == 0.0)
+	{
+		return 1.0;
+	}
+	else
+	{
+		x *= PI;
+		return sin(x) / x;
+	}
+}
+
+static bool InitWindowedSincLUT(void)
+{
+	Driver.fSincLUT = (float *)malloc(SINC_PHASES * SINC_WIDTH * sizeof (float));
+	if (Driver.fSincLUT == NULL)
 		return false;
 
-	float *fLUTPtr = Driver.fCubicLUT;
-	for (int32_t i = 0; i < CUBIC_PHASES; i++)
-	{
-		const double x1 = i * (1.0 / CUBIC_PHASES);
-		const double x2 = x1 * x1; // x^2
-		const double x3 = x2 * x1; // x^3
+	/* Kaiser-Bessel beta parameter
+	**
+	** Basically;
+	** Lower beta = less treble cut off, but more aliasing (shorter main lobe, more side lobe ripple)
+	** Higher beta = more treble cut off, but less aliasing (wider main lobe, less side lobe ripple)
+	**
+	** There simply isn't any optimal value here, it has to be tweaked to personal preference.
+	*/
+	const double kaiserBeta = 8.6;
 
-		*fLUTPtr++ = (float)(-0.5 * x3 + 1.0 * x2 - 0.5 * x1);
-		*fLUTPtr++ = (float)( 1.5 * x3 - 2.5 * x2 + 1.0);
-		*fLUTPtr++ = (float)(-1.5 * x3 + 2.0 * x2 + 0.5 * x1);
-		*fLUTPtr++ = (float)( 0.5 * x3 - 0.5 * x2);
+	const double besselI0Beta = 1.0 / besselI0(kaiserBeta);
+	for (int32_t i = 0; i < SINC_PHASES * SINC_WIDTH; i++)
+	{
+		const int32_t centeredPoint = (i & (SINC_WIDTH-1)) - ((SINC_WIDTH/2)-1);
+		const double phase = (i >> SINC_WIDTH_BITS) * (1.0 / SINC_PHASES);
+		const double x = centeredPoint - phase;
+
+		// Kaiser-Bessel window
+		const double n = x * (1.0 / (SINC_WIDTH/2));
+		const double window = besselI0(kaiserBeta * sqrt(1.0 - n * n)) * besselI0Beta;
+
+		Driver.fSincLUT[i] = (float)(sinc(x) * window);
 	}
 
 	return true;
@@ -83,6 +132,7 @@ static void HQ_MixSamples(void)
 		*fMixBufPtr++ = fLastClickRemovalLeft;
 		*fMixBufPtr++ = fLastClickRemovalRight;
 
+		// XXX: This may cause an issue if there is complete silence over a LONG time?
 		fLastClickRemovalLeft  -= fLastClickRemovalLeft  * (1.0f / 4096.0f);
 		fLastClickRemovalRight -= fLastClickRemovalRight * (1.0f / 4096.0f);
 	}
@@ -237,17 +287,40 @@ static void HQ_MixSamples(void)
 
 						if (sc->LoopDirection == DIR_BACKWARDS)
 						{
-							SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
+							if (sc->SamplingPosition == sc->LoopBegin)
+							{
+								sc->LoopDirection = DIR_FORWARDS;
 #if CPU_32BIT
-							if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
-								SamplesToMix = UINT16_MAX;
-
-							SamplesToMix = (((SamplesToMix << 16) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
-							Driver.Delta32 = 0 - sc->Delta32;
+								sc->Frac32 = (uint16_t)(0 - sc->Frac32);
 #else
-							SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | (uint32_t)sc->Frac64) / sc->Delta64) + 1);
-							Driver.Delta64 = 0 - sc->Delta64;
+								sc->Frac64 = (uint32_t)(0 - sc->Frac64);
 #endif
+								SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
+#if CPU_32BIT
+								if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
+									SamplesToMix = UINT16_MAX;
+
+								SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
+								Driver.Delta32 = sc->Delta32;
+#else
+								SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | ((uint32_t)sc->Frac64 ^ UINT32_MAX)) / sc->Delta64) + 1);
+								Driver.Delta64 = sc->Delta64;
+#endif
+							}
+							else
+							{
+								SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
+#if CPU_32BIT
+								if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
+									SamplesToMix = UINT16_MAX;
+
+								SamplesToMix = (((SamplesToMix << 16) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
+								Driver.Delta32 = 0 - sc->Delta32;
+#else
+								SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | (uint32_t)sc->Frac64) / sc->Delta64) + 1);
+								Driver.Delta64 = 0 - sc->Delta64;
+#endif
+							}
 						}
 						else // forwards
 						{
@@ -267,7 +340,9 @@ static void HQ_MixSamples(void)
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 
+						fixSamplesPingpong(s, sc); // for interpolation taps
 						Mix(sc, fMixBufferPtr, SamplesToMix);
+						unfixSamplesPingpong(s, sc); // for interpolation taps
 
 						MixBlockSize -= SamplesToMix;
 						fMixBufferPtr += SamplesToMix << 1;
@@ -281,8 +356,15 @@ static void HQ_MixSamples(void)
 								{
 									sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
 
-									if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
-										sc->SamplingPosition = sc->LoopBegin + 1;
+									if (sc->SamplingPosition == sc->LoopBegin)
+									{
+										sc->LoopDirection = DIR_FORWARDS;
+#if CPU_32BIT
+										sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+#else
+										sc->Frac64 = (uint32_t)(0 - sc->Frac64);
+#endif
+									}
 								}
 								else
 								{
@@ -294,6 +376,8 @@ static void HQ_MixSamples(void)
 									sc->Frac64 = (uint32_t)(0 - sc->Frac64);
 #endif
 								}
+
+								sc->HasLooped = true;
 							}
 						}
 						else // forwards
@@ -307,16 +391,19 @@ static void HQ_MixSamples(void)
 								}
 								else
 								{
-									sc->LoopDirection = DIR_BACKWARDS;
 									sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
+									if (sc->SamplingPosition != sc->LoopBegin)
+									{
+										sc->LoopDirection = DIR_BACKWARDS;
 #if CPU_32BIT
-									sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+										sc->Frac32 = (uint16_t)(0 - sc->Frac32);
 #else
-									sc->Frac64 = (uint32_t)(0 - sc->Frac64);
+										sc->Frac64 = (uint32_t)(0 - sc->Frac64);
 #endif
-									if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
-										sc->SamplingPosition = sc->LoopBegin + 1;
+									}
 								}
+
+								sc->HasLooped = true;
 							}
 						}
 					}
@@ -339,13 +426,18 @@ static void HQ_MixSamples(void)
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 
+						fixSamplesFwdLoop(s, sc); // for interpolation taps
 						Mix(sc, fMixBufferPtr, SamplesToMix);
+						unfixSamplesFwdLoop(s, sc); // for interpolation taps
 
 						MixBlockSize -= SamplesToMix;
 						fMixBufferPtr += SamplesToMix << 1;
 
 						if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
+						{
 							sc->SamplingPosition = sc->LoopBegin + ((uint32_t)(sc->SamplingPosition - sc->LoopEnd) % LoopLength);
+							sc->HasLooped = true;
+						}
 					}
 				}
 				else // no loop
@@ -366,6 +458,7 @@ static void HQ_MixSamples(void)
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 
+						fixSamplesNoLoop(s, sc); // for interpolation taps
 						Mix(sc, fMixBufferPtr, SamplesToMix);
 
 						MixBlockSize -= SamplesToMix;
@@ -431,8 +524,11 @@ static void HQ_ResetMixer(void)
 	MixTransferOffset = 0;
 	CurrentFractional = 0;
 	RandSeed = 0x12345000;
-	dPrngStateL = dPrngStateR = 0.0;
 	fLastClickRemovalLeft = fLastClickRemovalRight = 0.0f;
+
+#if !CPU_32BIT
+	dPrngStateL = dPrngStateR = 0.0;
+#endif
 }
 
 static inline int32_t Random32(void)
@@ -454,8 +550,7 @@ static int32_t HQ_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput)
 	int32_t SamplesTodo = (SamplesToOutput == 0) ? RealBytesToMix : SamplesToOutput;
 	for (int32_t i = 0; i < SamplesTodo; i++)
 	{
-#if CPU_32BIT // if 32-bit CPU, use single-precision float + no dithering (speed)
-
+#if CPU_32BIT // if 32-bit CPU, use single-precision float + no dithering (for speed)
 		// left channel
 		out32 = (int32_t)(fMixBuffer[MixTransferOffset++] * 32768.0f);
 		CLAMP16(out32);
@@ -466,7 +561,6 @@ static int32_t HQ_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput)
 		CLAMP16(out32);
 		*AudioOut16++ = (int16_t)out32;
 #else
-
 		// left channel - 1-bit triangular dithering
 		dPrng = Random32() * (0.5 / INT32_MAX); // -0.5 .. 0.5
 		dOut = (double)fMixBuffer[MixTransferOffset++] * 32768.0;
@@ -484,7 +578,6 @@ static int32_t HQ_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput)
 		out32 = (int32_t)dOut;
 		CLAMP16(out32);
 		*AudioOut16++ = (int16_t)out32;
-
 #endif
 	}
 
@@ -515,179 +608,6 @@ static void HQ_Mix(int32_t numSamples, int16_t *audioOut)
 	}
 }
 
-/* Fixes sample end bytes for interpolation (yes, we have room after the data).
-** Samples with sustain loop are not fixed (too complex to get right).
-*/
-static void HQ_FixSamples(void)
-{
-	sample_t *s = Song.Smp;
-	for (int32_t i = 0; i < Song.Header.SmpNum; i++, s++)
-	{
-		if (s->Data == NULL || s->Length == 0)
-			continue;
-
-		const bool Sample16Bit = !!(s->Flags & SMPF_16BIT);
-		const bool HasLoop = !!(s->Flags & SMPF_USE_LOOP);
-
-		int16_t *Data16 = (int16_t *)s->Data;
-		int16_t *Data16R = (int16_t *)s->DataR;
-		int8_t *Data8 = (int8_t *)s->Data;
-		int8_t *Data8R = (int8_t *)s->DataR;
-
-		/* All negative taps should be equal to the first sample point when at sampling
-		** position #0 (on sample trigger).
-		*/
-		if (Sample16Bit)
-		{
-			Data16[-1] = Data16[0];
-			if (Data16R != NULL) // right sample (if present)
-				Data16R[-1] = Data16R[0];
-		}
-		else
-		{
-			Data8[-1] = Data8[0];
-			if (Data8R != NULL) // right sample (if present)
-				Data8R[-1] = Data8R[0];
-		}
-
-		if (Sample16Bit)
-		{
-			// 16 bit
-
-			if (HasLoop)
-			{
-				if (s->Flags & SMPF_LOOP_PINGPONG)
-				{
-					int32_t LastSample = s->LoopEnd;
-					if (LastSample < 0)
-						LastSample = 0;
-
-					Data16[s->LoopEnd+0] = Data16[LastSample];
-					if (LastSample > 0)
-						Data16[s->LoopEnd+1] = Data16[LastSample-1];
-					else
-						Data16[s->LoopEnd+1] = Data16[LastSample];
-
-					// right sample (if present)
-					if (Data16R != NULL)
-					{
-						Data16R[s->LoopEnd+0] = Data16R[LastSample];
-						if (LastSample > 0)
-							Data16R[s->LoopEnd+1] = Data16R[LastSample-1];
-						else
-							Data16R[s->LoopEnd+1] = Data16R[LastSample];
-					}
-
-					/* For bidi loops:
-					** The loopstart point is never read after having looped once.
-					** IT2 behaves like that. It loops loopstart+1 to loopend-1.
-					** As such, there's no point in modifying the -1 point.
-					** We already set the -1 point to the 0 point above.
-					*/
-				}
-				else
-				{
-					if (s->LoopBegin == 0)
-						Data16[-1] = Data16[s->LoopEnd-1];
-
-					Data16[s->LoopEnd+0] = Data16[s->LoopBegin+0];
-					Data16[s->LoopEnd+1] = Data16[s->LoopBegin+1];
-
-					// right sample (if present)
-					if (Data16R != NULL)
-					{
-						if (s->LoopBegin == 0)
-							Data16R[-1] = Data16R[s->LoopEnd-1];
-
-						Data16R[s->LoopEnd+0] = Data16R[s->LoopBegin+0];
-						Data16R[s->LoopEnd+1] = Data16R[s->LoopBegin+1];
-					}
-				}
-			}
-			else
-			{
-				Data16[s->Length+0] = Data16[s->Length-1];
-				Data16[s->Length+1] = Data16[s->Length-1];
-
-				// right sample (if present)
-				if (Data16R != NULL)
-				{
-					Data16R[s->Length+0] = Data16R[s->Length-1];
-					Data16R[s->Length+1] = Data16R[s->Length-1];
-				}
-			}
-		}
-		else
-		{
-			// 8 bit
-
-			if (HasLoop)
-			{
-				if (s->Flags & SMPF_LOOP_PINGPONG)
-				{
-					int32_t LastSample = s->LoopEnd - 1;
-					if (LastSample < 0)
-						LastSample = 0;
-
-					Data8[s->LoopEnd+0] = Data8[LastSample];
-					if (LastSample > 0)
-						Data8[s->LoopEnd+1] = Data8[LastSample-1];
-					else
-						Data8[s->LoopEnd+1] = Data8[LastSample];
-
-					// right sample (if present)
-					if (Data8R != NULL)
-					{
-						Data8R[s->LoopEnd+0] = Data8R[LastSample];
-						if (LastSample > 0)
-							Data8R[s->LoopEnd+1] = Data8R[LastSample-1];
-						else
-							Data8R[s->LoopEnd+1] = Data8R[LastSample];
-
-					}
-
-					/* For bidi loops:
-					** The loopstart point is never read after having looped once.
-					** IT2 behaves like that. It loops loopstart+1 to loopend-1.
-					** As such, there's no point in modifying the -1 point.
-					** We already set the -1 point to the 0 point above.
-					*/
-				}
-				else
-				{
-					if (s->LoopBegin == 0)
-						Data8[-1] = Data8[s->LoopEnd-1];
-
-					Data8[s->LoopEnd+0] = Data8[s->LoopBegin+0];
-					Data8[s->LoopEnd+1] = Data8[s->LoopBegin+1];
-
-					// right sample (if present)
-					if (Data8R != NULL)
-					{
-						if (s->LoopBegin == 0)
-							Data8R[-1] = Data8R[s->LoopEnd-1];
-
-						Data8R[s->LoopEnd+0] = Data8R[s->LoopBegin+0];
-						Data8R[s->LoopEnd+1] = Data8R[s->LoopBegin+1];
-					}
-				}
-			}
-			else
-			{
-				Data8[s->Length+0] = Data8[s->Length-1];
-				Data8[s->Length+1] = Data8[s->Length-1];
-
-				// right sample (if present)
-				if (Data8R != NULL)
-				{
-					Data8R[s->Length+0] = Data8R[s->Length-1];
-					Data8R[s->Length+1] = Data8R[s->Length-1];
-				}
-			}
-		}
-	}
-}
-
 static void HQ_CloseDriver(void)
 {
 	if (fMixBuffer != NULL)
@@ -696,10 +616,10 @@ static void HQ_CloseDriver(void)
 		fMixBuffer = NULL;
 	}
 
-	if (Driver.fCubicLUT != NULL)
+	if (Driver.fSincLUT != NULL)
 	{
-		free(Driver.fCubicLUT);
-		Driver.fCubicLUT = NULL;
+		free(Driver.fSincLUT);
+		Driver.fSincLUT = NULL;
 	}
 
 	DriverClose = NULL;
@@ -718,8 +638,8 @@ bool HQ_InitDriver(int32_t mixingFrequency)
 		mixingFrequency = 8000;
 
 #if CPU_32BIT
-	if (mixingFrequency > 48000) // higher means bigger pitch errors (.16fp limitation)!
-		mixingFrequency = 48000;
+	if (mixingFrequency > 64000)
+		mixingFrequency = 64000;
 #else
 	if (mixingFrequency > 768000)
 		mixingFrequency = 768000;
@@ -739,7 +659,8 @@ bool HQ_InitDriver(int32_t mixingFrequency)
 	// calculate samples-per-tick tables
 	for (int32_t i = LOWEST_BPM_POSSIBLE; i <= 255; i++)
 	{
-		const double dSamplesPerTick = (Driver.MixSpeed * 2.5) / i;
+		const double dHz = i * (1.0 / 2.5);
+		const double dSamplesPerTick = Driver.MixSpeed / dHz;
 
 		// break into int/frac parts
 		double dInt;
@@ -755,16 +676,16 @@ bool HQ_InitDriver(int32_t mixingFrequency)
 	DriverMix = HQ_Mix;
 	DriverSetTempo = HQ_SetTempo;
 	DriverSetMixVolume = HQ_SetMixVolume;
-	DriverFixSamples = HQ_FixSamples;
+	DriverFixSamples = NULL; // not used, we do it in realtime instead for accuracy
 	DriverResetMixer = HQ_ResetMixer;
 	DriverPostMix = HQ_PostMix;
 	DriverMixSamples = HQ_MixSamples;
 
 #if CPU_32BIT
-	dFreq2DeltaMul = (double)(UINT16_MAX+1.0) / mixingFrequency; // .16fp
+	dFreq2DeltaMul = (double)(UINT16_MAX+1.0) / Driver.MixSpeed; // .16fp
 #else
-	dFreq2DeltaMul = (double)(UINT32_MAX+1.0) / mixingFrequency; // .32fp
+	dFreq2DeltaMul = (double)(UINT32_MAX+1.0) / Driver.MixSpeed; // .32fp
 #endif
 
-	return InitCubicSplineLUT();
+	return InitWindowedSincLUT();
 }

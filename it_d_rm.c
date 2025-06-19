@@ -98,7 +98,8 @@ bool Music_LoadFromData(uint8_t *Data, uint32_t DataLen)
 	if (WasLoaded)
 	{
 		DriverSetMixVolume(Song.Header.MixVolume);
-		DriverFixSamples();
+		if (DriverFixSamples != NULL)
+			DriverFixSamples();
 
 		Song.Loaded = true;
 		return true;

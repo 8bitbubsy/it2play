@@ -5,7 +5,7 @@ This is a direct port of the original asm source codes. \
 The project contains example code in the it2play folder on how to interface with the API.
 
 # Notes
-- The default driver (HQ) is my own, which has a floating-point mixer, better tempo (BPM) precision, 4-tap cubic spline interpolation and stereo sample support.
+- The default driver (HQ) is my own, which has a floating-point mixer, better tempo (BPM) precision, 8-tap windowed-sinc interpolation and stereo sample support.
 - it2play uses integer arithmetics for pitch slides, just like IT2 versions before 2.15 (2.15 uses FPU code). \
   This was done to match the IT2 versions most people were making music with. 2.15 was paid software, few people used it.
 - To compile it2play (the test program) on macOS/Linux, you need SDL2. TODO: Implement ALSA/JACK drivers.

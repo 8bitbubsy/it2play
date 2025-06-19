@@ -75,12 +75,12 @@ static void SB16MMX_MixSamples(void)
 				sc->OldSamples[0] = 0;
 
 				/* 8bb: This one was supposed to be cleared, but Jeffrey Lim accidentally used
-				** the DX register instead of the AX one.
-				** That means that the content relies on what was in DX at the time. Thankfully,
-				** whenever the SF_NEW_NOTE is set, SF_FREQ_CHANGE is also set, hence we only need
-				** to simulate a DX value change from the mixer delta calculation (see above).
+				** the DX register instead of AX. That means that the content relies on what was
+				** in DX at the time. Thankfully, whenever the SF_NEW_NOTE is set, SF_FREQ_CHANGE
+				** is also set, hence we only need to simulate a DX value change from the mixer
+				** delta calculation (see above).
 				**
-				** This quirk is important, as it can actually change the shape of the waveform.
+				** This bug is important to simulate, as it can actually change the shape of the waveform.
 				*/
 				sc->OldSamples[1] = OldSamplesBug;
 				// -----------------------
@@ -164,7 +164,7 @@ static void SB16MMX_MixSamples(void)
 
 							/*
 							** 8bb: For all possible filter parameters ((127*255+1)*(127+1) = 4145408), there's about
-							** 0.06% off-by-one errors on x86/x86_64 versus real IT2. This is still pretty accurate.
+							** 0.06% off-by-one errors in it2play vs. real IT2. This is fairly accurate.
 							**
 							** Use nearbyintf() instead of roundf(), to get even less rounding errors vs. IT2 for
 							** special numbers. The default rounding mode is FE_TONEAREST, which is what we want.
@@ -306,9 +306,11 @@ static void SB16MMX_MixSamples(void)
 								if (NewLoopPos >= LoopLength)
 								{
 									sc->SamplingPosition = (sc->LoopEnd - 1) - (NewLoopPos - LoopLength);
-
-									if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
-										sc->SamplingPosition = sc->LoopBegin + 1;
+									if (sc->SamplingPosition == sc->LoopBegin)
+									{
+										sc->LoopDirection = DIR_FORWARDS;
+										sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+									}
 								}
 								else
 								{
@@ -329,12 +331,12 @@ static void SB16MMX_MixSamples(void)
 								}
 								else
 								{
-									sc->LoopDirection = DIR_BACKWARDS;
 									sc->SamplingPosition = (sc->LoopEnd - 1) - NewLoopPos;
-									sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-
-									if (sc->SamplingPosition <= sc->LoopBegin) // 8bb: non-IT2 edge-case safety for extremely high pitches
-										sc->SamplingPosition = sc->LoopBegin + 1;
+									if (sc->SamplingPosition != sc->LoopBegin)
+									{
+										sc->LoopDirection = DIR_BACKWARDS;
+										sc->Frac32 = (uint16_t)(0 - sc->Frac32);
+									}
 								}
 							}
 						}
