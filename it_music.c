@@ -1198,18 +1198,18 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 			FreqSlide64 += PeriodBase;
 
-			uint32_t ShitValue = 0;
+			uint32_t ShiftValue = 0;
 			while (FreqSlide64 > UINT32_MAX)
 			{
 				FreqSlide64 >>= 1;
-				ShitValue++;
+				ShiftValue++;
 			}
 
 			uint32_t Temp32 = (uint32_t)FreqSlide64;
 			uint64_t Temp64 = (uint64_t)sc->Frequency * (uint32_t)PeriodBase;
 
-			if (ShitValue > 0)
-				Temp64 >>= ShitValue;
+			if (ShiftValue > 0)
+				Temp64 >>= ShiftValue;
 
 			if (Temp32 <= Temp64>>32)
 			{
