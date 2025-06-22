@@ -913,7 +913,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 	uint8_t count = 2; // Find maximum count, has to be greater than 2 channels
 	for (int32_t i = 0; i < 100; i++)
 	{
-		if (count < ChannelCountTable[i])
+		if (ChannelCountTable[i] > count)
 		{
 			count = ChannelCountTable[i];
 			sc = ChannelLocationTable[i];
@@ -942,7 +942,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		count = 1;
 		for (uint8_t i = 0; i < MAX_HOST_CHANNELS; i++)
 		{
-			if (count < ChannelCountTable[i])
+			if (ChannelCountTable[i] > count)
 			{
 				count = ChannelCountTable[i];
 				hostChnNum = i;
