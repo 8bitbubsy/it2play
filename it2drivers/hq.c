@@ -1,8 +1,8 @@
 /*
-** ---- Custom high quality floating-point driver, by 8bitbubsy ----
+** ---- Custom (non-IT2) high quality floating-point driver ----
 **
-** Behaves like the SB16 MMX driver when it comes to filter clamping,
-** volume ramp speed and bidi looping.
+** Behaves like the SB16 MMX driver when it comes to filter clamping
+** and bidi loop wrapping.
 **
 ** Features:
 ** - 8-tap windowed-sinc interpolation
@@ -10,8 +10,8 @@
 ** - 32.32 fixed-point sampling precision (32.16 if 32-bit CPU, for speed)
 ** - Ended non-looping samples are ramped out, like the WAV writer driver
 **
-** Compiling for 64-bit is ideal, for higher precision and support for'
-** higher mixing frequencies than 48kHz.
+** Compiling for 64-bit is ideal as it results in higher precision and support
+** for higher mixing frequencies than 48kHz.
 */
 
 #include <assert.h>
