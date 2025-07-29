@@ -1028,7 +1028,7 @@ static void InitTremolo(hostChn_t *hc)
 	{
 		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 
-		sc->Flags |= SF_RECALC_FINALVOL; // Volume change...
+		sc->Flags |= SF_UPDATE_MIXERVOL; // Volume change...
 		CommandR2(hc, sc, hc->LastTremoloData);
 	}
 	else
@@ -1454,7 +1454,7 @@ static void InitCommandX2(hostChn_t *hc, uint8_t pan) // 8bb: pan = 0..63
 	{
 		slaveChn_t *sc = (slaveChn_t *)hc->SlaveChnPtr;
 		sc->Pan = sc->PanSet = pan;
-		sc->Flags |= (SF_RECALC_PAN | SF_RECALC_FINALVOL);
+		sc->Flags |= (SF_RECALC_PAN | SF_UPDATE_MIXERVOL);
 	}
 
 	hc->ChnPan = pan;
@@ -1741,7 +1741,7 @@ void CommandQ(hostChn_t *hc)
 	sc->HasLooped = false; // 8bb: for my high-quality driver/mixer
 	sc->SamplingPosition = 0;
 
-	sc->Flags |= (SF_RECALC_FINALVOL | SF_NEW_NOTE | SF_LOOP_CHANGED);
+	sc->Flags |= (SF_UPDATE_MIXERVOL | SF_NEW_NOTE | SF_LOOP_CHANGED);
 
 	uint8_t vol = sc->VolSet;
 	switch (hc->EfxMem_Q >> 4)

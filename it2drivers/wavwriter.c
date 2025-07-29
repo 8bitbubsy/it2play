@@ -66,7 +66,7 @@ static void WAVWriter_MixSamples(void)
 			sc->Flags &= ~SF_CHAN_ON; // Turn off channel
 
 			sc->FinalVol32768 = 0;
-			sc->Flags |= SF_RECALC_FINALVOL;
+			sc->Flags |= SF_UPDATE_MIXERVOL;
 		}
 
 		if (sc->Flags & SF_FREQ_CHANGE)
@@ -99,7 +99,7 @@ static void WAVWriter_MixSamples(void)
 			// -----------------------
 		}
 
-		if (sc->Flags & (SF_RECALC_FINALVOL | SF_LOOP_CHANGED | SF_PAN_CHANGED))
+		if (sc->Flags & (SF_UPDATE_MIXERVOL | SF_LOOP_CHANGED | SF_PAN_CHANGED))
 		{
 			uint8_t FilterQ;
 
@@ -425,7 +425,7 @@ static void WAVWriter_MixSamples(void)
 		}
 
 		sc->Flags &= ~(SF_RECALC_PAN      | SF_RECALC_VOL | SF_FREQ_CHANGE |
-		               SF_RECALC_FINALVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
+		               SF_UPDATE_MIXERVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
 		               SF_LOOP_CHANGED    | SF_PAN_CHANGED);
 	}
 }

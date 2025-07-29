@@ -232,7 +232,7 @@ static void MIDISendFilter(hostChn_t *hc, slaveChn_t *sc, uint8_t Data)
 				Driver.FilterParameters[hc->HostChnNum & 127] = Data;
 
 			if (sc != NULL)
-				sc->Flags |= SF_RECALC_FINALVOL;
+				sc->Flags |= SF_UPDATE_MIXERVOL;
 		}
 
 		MIDIInterpretState = 0;
@@ -1748,7 +1748,7 @@ static void UpdateInstruments(void)
 					EnvVal--;
 
 				sc->MIDIBank = (sc->MIDIBank & 0xFF00) | (uint8_t)EnvVal; // 8bb: don't mess with upper byte!
-				sc->Flags |= SF_RECALC_FINALVOL;
+				sc->Flags |= SF_UPDATE_MIXERVOL;
 			}
 
 			if (sc->Flags & SF_PANENV_ON)
@@ -1835,7 +1835,7 @@ static void UpdateInstruments(void)
 		if (sc->Flags & SF_RECALC_VOL) // Calculate volume
 		{
 			sc->Flags &= ~SF_RECALC_VOL;
-			sc->Flags |= SF_RECALC_FINALVOL;
+			sc->Flags |= SF_UPDATE_MIXERVOL;
 
 			uint16_t volume = (sc->Vol * sc->ChnVol * sc->FadeOut) >> 7;
 			volume = (volume * sc->SmpVol) >> 7;
@@ -1891,7 +1891,7 @@ static void UpdateSamples(void) // 8bb: for songs without instruments
 		if (sc->Flags & SF_RECALC_VOL) // 8bb: recalculate volume
 		{
 			sc->Flags &= ~SF_RECALC_VOL;
-			sc->Flags |= SF_RECALC_FINALVOL;
+			sc->Flags |= SF_UPDATE_MIXERVOL;
 
 			uint16_t volume = (((sc->Vol * sc->ChnVol * sc->SmpVol) >> 4) * Song.GlobalVolume) >> 7;
 			assert(volume <= 32768);

@@ -88,7 +88,7 @@ static void SB16MMX_MixSamples(void)
 				sc->OldLeftVolume = sc->OldRightVolume = 0; // Current Volume = 0 for volume sliding.
 			}
 
-			if (sc->Flags & (SF_RECALC_FINALVOL | SF_NEW_NOTE | SF_LOOP_CHANGED | SF_PAN_CHANGED))
+			if (sc->Flags & (SF_UPDATE_MIXERVOL | SF_NEW_NOTE | SF_LOOP_CHANGED | SF_PAN_CHANGED))
 			{
 				if (sc->Flags & SF_CHN_MUTED)
 				{
@@ -261,7 +261,7 @@ static void SB16MMX_MixSamples(void)
 				if (sc->MixOffset == 3) // 8bb: filters (and volramp)
 				{
 					// 8bb: filters uses double volume range (because of 15-bit sample input)
-					if (sc->Flags & (SF_RECALC_FINALVOL | SF_NEW_NOTE | SF_LOOP_CHANGED | SF_PAN_CHANGED))
+					if (sc->Flags & (SF_UPDATE_MIXERVOL | SF_NEW_NOTE | SF_LOOP_CHANGED | SF_PAN_CHANGED))
 					{
 						DestVolL += DestVolL;
 						DestVolR += DestVolR;
@@ -434,7 +434,7 @@ static void SB16MMX_MixSamples(void)
 		}
 
 		sc->Flags &= ~(SF_RECALC_PAN      | SF_RECALC_VOL | SF_FREQ_CHANGE |
-		               SF_RECALC_FINALVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
+		               SF_UPDATE_MIXERVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
 		               SF_LOOP_CHANGED    | SF_PAN_CHANGED);
 	}
 }

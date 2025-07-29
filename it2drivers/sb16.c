@@ -52,7 +52,7 @@ static void SB16_MixSamples(void)
 			sc->Delta32 = (Quotient << MIX_FRAC_BITS) | (uint16_t)((Remainder << MIX_FRAC_BITS) / Driver.MixSpeed);
 		}
 
-		if (sc->Flags & (SF_RECALC_FINALVOL | SF_LOOP_CHANGED | SF_PAN_CHANGED))
+		if (sc->Flags & (SF_UPDATE_MIXERVOL | SF_LOOP_CHANGED | SF_PAN_CHANGED))
 		{
 			if (!(sc->Flags & SF_CHN_MUTED))
 			{
@@ -91,7 +91,7 @@ static void SB16_MixSamples(void)
 			}
 
 			sc->Flags &= ~(SF_RECALC_PAN      | SF_RECALC_VOL | SF_FREQ_CHANGE |
-			               SF_RECALC_FINALVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
+			               SF_UPDATE_MIXERVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
 			               SF_LOOP_CHANGED    | SF_PAN_CHANGED);
 
 			continue;
@@ -245,7 +245,7 @@ static void SB16_MixSamples(void)
 		}
 
 		sc->Flags &= ~(SF_RECALC_PAN      | SF_RECALC_VOL | SF_FREQ_CHANGE |
-		               SF_RECALC_FINALVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
+		               SF_UPDATE_MIXERVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
 		               SF_LOOP_CHANGED    | SF_PAN_CHANGED);
 	}
 }
