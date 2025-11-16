@@ -46,25 +46,6 @@ static double dFreq2DeltaMul;
 static double dPrngStateL, dPrngStateR;
 #endif
 
-// zeroth-order modified Bessel function of the first kind (series approximation)
-static inline double besselI0(double z)
-{
-#define EPSILON (1E-12) /* verified: lower than this makes no change when LUT output is single-precision float */
-
-	double s = 1.0, ds = 1.0, d = 2.0;
-	const double zz = z * z;
-
-	do
-	{
-		ds *= zz / (d * d);
-		s += ds;
-		d += 2.0;
-	}
-	while (ds > s*EPSILON);
-
-	return s;
-}
-
 static inline double sinc(double x)
 {
 	if (x == 0.0)
@@ -84,28 +65,26 @@ static bool InitWindowedSincLUT(void)
 	if (Driver.fSincLUT == NULL)
 		return false;
 
-	/* Kaiser-Bessel beta parameter
-	**
-	** Basically;
-	** Lower beta = less treble cut off, but more aliasing (shorter main lobe, more side lobe ripple)
-	** Higher beta = more treble cut off, but less aliasing (wider main lobe, less side lobe ripple)
-	**
-	** There simply isn't any optimal value here, it has to be tweaked to personal preference.
-	*/
-	const double kaiserBeta = 8.6;
+	// sinc with Blackman window
 
-	const double besselI0Beta = 1.0 / besselI0(kaiserBeta);
-	for (int32_t i = 0; i < SINC_PHASES * SINC_WIDTH; i++)
+	const double alpha = 0.197328; // approximation of Kaiser-Bessel (beta=9.42)
+
+	const double a0 = (1.0 - alpha) * 0.5;
+	const double a1 = 0.5;
+	const double a2 = alpha * 0.5;
+
+	for (int32_t i = 0; i < SINC_WIDTH * SINC_PHASES; i++)
 	{
-		const int32_t centeredPoint = (i & (SINC_WIDTH-1)) - ((SINC_WIDTH/2)-1);
-		const double phase = (i >> SINC_WIDTH_BITS) * (1.0 / SINC_PHASES);
-		const double x = centeredPoint - phase;
+		const double x = i * (1.0 / (SINC_WIDTH*SINC_PHASES));
+		const double n = (x - 0.5) * SINC_WIDTH;
 
-		// Kaiser-Bessel window
-		const double n = x * (1.0 / (SINC_WIDTH/2));
-		const double window = besselI0(kaiserBeta * sqrt(1.0 - n * n)) * besselI0Beta;
+		const double window = a0 - (a1 * cos((2.0 * PI) * x)) + (a2 * cos((4.0 * PI) * x));
+		const float wsinc = (float)(sinc(n) * window);
 
-		Driver.fSincLUT[i] = (float)(sinc(x) * window);
+		// rearrange LUT for faster access in mixer
+		const uint32_t point = i >> SINC_PHASES_BITS;
+		const uint32_t phase = i & (SINC_PHASES-1);
+		Driver.fSincLUT[(((SINC_PHASES-1)-phase) << SINC_WIDTH_BITS) + point] = wsinc;
 	}
 
 	return true;
