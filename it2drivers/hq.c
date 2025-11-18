@@ -72,8 +72,8 @@ static bool InitWindowedSincLUT(void)
 
 		// Cosine-sum window (approximation of Kaiser-Bessel with beta=9.2)
 		const double w = 0.40719122268357 -
-	                        (0.49860425525392 * cos((2.0 * PI) * x)) +
-	                        (0.09406372638699 * cos((4.0 * PI) * x));
+		                (0.49860425525392 * cos((2.0 * PI) * x)) +
+		                (0.09406372638699 * cos((4.0 * PI) * x));
 
 		const float wsinc = (float)(sinc(n) * window);
 
