@@ -65,20 +65,16 @@ static bool InitWindowedSincLUT(void)
 	if (Driver.fSincLUT == NULL)
 		return false;
 
-	// sinc with Blackman window
-
-	const double alpha = 0.197328; // approximation of Kaiser-Bessel (beta=9.42)
-
-	const double a0 = (1.0 - alpha) * 0.5;
-	const double a1 = 0.5;
-	const double a2 = alpha * 0.5;
-
 	for (int32_t i = 0; i < SINC_WIDTH * SINC_PHASES; i++)
 	{
 		const double x = i * (1.0 / (SINC_WIDTH*SINC_PHASES));
 		const double n = (x - 0.5) * SINC_WIDTH;
 
-		const double window = a0 - (a1 * cos((2.0 * PI) * x)) + (a2 * cos((4.0 * PI) * x));
+		// Cosine-sum window (approximation of Kaiser-Bessel with beta=9.2)
+		const double w = 0.40719122268357 -
+	                        (0.49860425525392 * cos((2.0 * PI) * x)) +
+	                        (0.09406372638699 * cos((4.0 * PI) * x));
+
 		const float wsinc = (float)(sinc(n) * window);
 
 		// rearrange LUT for faster access in mixer

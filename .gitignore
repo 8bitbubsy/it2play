@@ -22,3 +22,4 @@ it2play/vs2019_project/Debug/it2play.vcxproj.FileListAbsolute.txt
 *.wav
 *.it
 it2play/vs2019_project/Release/it2play.vcxproj.FileListAbsolute.txt
+.DS_Store
