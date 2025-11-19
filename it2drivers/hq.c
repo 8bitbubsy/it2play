@@ -46,41 +46,44 @@ static double dFreq2DeltaMul;
 static double dPrngStateL, dPrngStateR;
 #endif
 
-static inline double sinc(double x)
+static inline float sincf(float x)
 {
-	if (x == 0.0)
+	if (x == 0.0f)
 	{
-		return 1.0;
+		return 1.0f;
 	}
 	else
 	{
-		x *= PI;
-		return sin(x) / x;
+		x *= (float)PI;
+		return sinf(x) / x;
 	}
 }
 
 static bool InitWindowedSincLUT(void)
 {
-	Driver.fSincLUT = (float *)malloc(SINC_PHASES * SINC_WIDTH * sizeof (float));
+	Driver.fSincLUT = (float *)malloc(SINC_WIDTH * SINC_PHASES * sizeof (float));
 	if (Driver.fSincLUT == NULL)
 		return false;
 
+	/*
+	** For faster compute time, calculate in single-precision float 
+	** and use an approximation of a Kaiser-Bessel window.
+	*/
 	for (int32_t i = 0; i < SINC_WIDTH * SINC_PHASES; i++)
 	{
-		const double x = i * (1.0 / (SINC_WIDTH*SINC_PHASES));
-		const double n = (x - 0.5) * SINC_WIDTH;
+		const float x = (float)i * (1.0f / (SINC_WIDTH * SINC_PHASES));
 
-		// Cosine-sum window (approximation of Kaiser-Bessel with beta=9.2)
-		const double window = 0.40719122268357 -
-		                     (0.49860425525392 * cos((2.0 * PI) * x)) +
-		                     (0.09406372638699 * cos((4.0 * PI) * x));
+		// cosine-sum window (approximation of Kaiser-Bessel with alpha=3.00 beta=9.42)
+		const float window = 0.4025700f -
+		                    (0.4981102f * cosf((float)(2.0 * PI) * x)) +
+		                    (0.0978668f * cosf((float)(4.0 * PI) * x));
 
-		const float wsinc = (float)(sinc(n) * window);
+		const float sinc = sincf((x - 0.5f) * SINC_WIDTH) * window;
 
 		// rearrange LUT for faster access in mixer
 		const uint32_t point = i >> SINC_PHASES_BITS;
 		const uint32_t phase = i & (SINC_PHASES-1);
-		Driver.fSincLUT[(((SINC_PHASES-1)-phase) << SINC_WIDTH_BITS) + point] = wsinc;
+		Driver.fSincLUT[(((SINC_PHASES-1)-phase) << SINC_WIDTH_BITS) + point] = sinc;
 	}
 
 	return true;
