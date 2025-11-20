@@ -10,8 +10,7 @@
 ** - 32.32 fixed-point sampling precision (32.16 if 32-bit CPU, for speed)
 ** - Ended non-looping samples are ramped out, like the WAV writer driver
 **
-** Compiling for 64-bit is ideal as it results in higher precision and support
-** for higher mixing frequencies than 48kHz.
+** Compiling for 64-bit is ideal as it results in higher-precision voice frequencies.
 */
 
 #include <assert.h>
@@ -27,7 +26,12 @@
 #include "hq_fixsample.h"
 #include "zerovol.h"
 
+// Higher is better. 14 is max for audio output rates of 44100Hz (and higher).
+#define FREQ_MUL_EXTRA_BITS 14
+
 #define PI 3.14159265358979323846264338327950288
+
+#define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 
 // fast 32-bit -> 16-bit clamp
 #define CLAMP16(i) if ((int16_t)i != i) i = INT16_MAX ^ ((int32_t)i >> 31)
@@ -37,11 +41,10 @@
 #define BPM_FRAC_MASK (BPM_FRAC_SCALE-1)
 
 static uint16_t MixVolume;
-static int32_t RealBytesToMix, BytesToMix, MixTransferRemaining, MixTransferOffset;
+static int32_t RealBytesToMix, BytesToMix, MixTransferRemaining, MixTransferOffset, FreqMulVal;
 static uint32_t BytesToMixFractional, CurrentFractional, RandSeed;
 static uint32_t SamplesPerTickInt[256-LOWEST_BPM_POSSIBLE], SamplesPerTickFrac[256-LOWEST_BPM_POSSIBLE];
 static float *fMixBuffer, fLastClickRemovalLeft, fLastClickRemovalRight, fPrngStateL, fPrngStateR;
-static double dFreq2DeltaMul;
 
 static inline float sincf(float x)
 {
@@ -138,9 +141,11 @@ static void HQ_MixSamples(void)
 			}
 
 #if CPU_32BIT
-			sc->Delta32 = (int32_t)((int32_t)sc->Frequency * dFreq2DeltaMul); // mixer delta (16.16fp)
+			// mixer delta (16.16fp)
+			sc->Delta32 = (uint32_t)(((int64_t)sc->Frequency * FreqMulVal) >> (16+FREQ_MUL_EXTRA_BITS));
 #else
-			sc->Delta64 = (int64_t)((int32_t)sc->Frequency * dFreq2DeltaMul); // mixer delta (32.32fp)
+			// mixer delta (32.32fp)
+			sc->Delta64 = ((int64_t)sc->Frequency * FreqMulVal) >> FREQ_MUL_EXTRA_BITS;
 #endif
 		}
 
@@ -205,8 +210,8 @@ static void HQ_MixSamples(void)
 				}
 				else // normal (panned)
 				{
-					sc->fLeftVolume  = ((64-sc->FinalPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
-					sc->fRightVolume = ((   sc->FinalPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
+					sc->fLeftVolume  = ((int32_t)(64-sc->FinalPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
+					sc->fRightVolume = ((int32_t)(   sc->FinalPan) * Vol) * (1.0f / (64.0f * 32768.0f * 128.0f));
 				}
 			}
 		}
@@ -269,7 +274,7 @@ static void HQ_MixSamples(void)
 #endif
 								SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 #if CPU_32BIT
-								if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
+								if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 									SamplesToMix = UINT16_MAX;
 
 								SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
@@ -283,7 +288,7 @@ static void HQ_MixSamples(void)
 							{
 								SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
 #if CPU_32BIT
-								if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
+								if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 									SamplesToMix = UINT16_MAX;
 
 								SamplesToMix = (((SamplesToMix << 16) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
@@ -298,7 +303,7 @@ static void HQ_MixSamples(void)
 						{
 							SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 #if CPU_32BIT
-							if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
+							if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 								SamplesToMix = UINT16_MAX;
 
 							SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
@@ -386,7 +391,7 @@ static void HQ_MixSamples(void)
 					{
 						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 #if CPU_32BIT
-						if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
+						if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 							SamplesToMix = UINT16_MAX;
 
 						SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
@@ -418,7 +423,7 @@ static void HQ_MixSamples(void)
 					{
 						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
 #if CPU_32BIT
-						if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
+						if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
 							SamplesToMix = UINT16_MAX;
 
 						SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
@@ -589,16 +594,14 @@ static void HQ_CloseDriver(void)
 
 bool HQ_InitDriver(int32_t mixingFrequency)
 {
-	if (mixingFrequency < 8000)
-		mixingFrequency = 8000;
-
+	// 32769Hz is absolute lowest (for FreqMulVal to fit in INT32_MAX)
 #if CPU_32BIT
-	if (mixingFrequency > 64000)
-		mixingFrequency = 64000;
+	mixingFrequency = CLAMP(mixingFrequency, 32769, 64000);
 #else
-	if (mixingFrequency > 768000)
-		mixingFrequency = 768000;
+	mixingFrequency = CLAMP(mixingFrequency, 32769, 768000);
 #endif
+
+	FreqMulVal = (int32_t)round((double)(1ULL << (32+FREQ_MUL_EXTRA_BITS)) / mixingFrequency);
 
 	const int32_t MaxSamplesToMix = (int32_t)ceil((mixingFrequency * 2.5) / LOWEST_BPM_POSSIBLE) + 1;
 
@@ -635,12 +638,6 @@ bool HQ_InitDriver(int32_t mixingFrequency)
 	DriverResetMixer = HQ_ResetMixer;
 	DriverPostMix = HQ_PostMix;
 	DriverMixSamples = HQ_MixSamples;
-
-#if CPU_32BIT
-	dFreq2DeltaMul = (double)(UINT16_MAX+1.0) / Driver.MixSpeed; // .16fp
-#else
-	dFreq2DeltaMul = (double)(UINT32_MAX+1.0) / Driver.MixSpeed; // .32fp
-#endif
 
 	return InitWindowedSincLUT();
 }
