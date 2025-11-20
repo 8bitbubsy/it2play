@@ -40,11 +40,8 @@ static uint16_t MixVolume;
 static int32_t RealBytesToMix, BytesToMix, MixTransferRemaining, MixTransferOffset;
 static uint32_t BytesToMixFractional, CurrentFractional, RandSeed;
 static uint32_t SamplesPerTickInt[256-LOWEST_BPM_POSSIBLE], SamplesPerTickFrac[256-LOWEST_BPM_POSSIBLE];
-static float *fMixBuffer, fLastClickRemovalLeft, fLastClickRemovalRight;
+static float *fMixBuffer, fLastClickRemovalLeft, fLastClickRemovalRight, fPrngStateL, fPrngStateR;
 static double dFreq2DeltaMul;
-#if !CPU_32BIT
-static double dPrngStateL, dPrngStateR;
-#endif
 
 static inline float sincf(float x)
 {
@@ -91,29 +88,26 @@ static bool InitWindowedSincLUT(void)
 
 static void HQ_MixSamples(void)
 {
-	MixTransferOffset = 0;
-
 	RealBytesToMix = BytesToMix;
-
 	CurrentFractional += BytesToMixFractional;
-	if (CurrentFractional > BPM_FRAC_SCALE)
+	if (CurrentFractional >= BPM_FRAC_SCALE)
 	{
 		CurrentFractional &= BPM_FRAC_MASK;
 		RealBytesToMix++;
 	}
 
 	// click removal (also clears buffer)
-
 	float *fMixBufPtr = fMixBuffer;
 	for (int32_t i = 0; i < RealBytesToMix; i++)
 	{
 		*fMixBufPtr++ = fLastClickRemovalLeft;
 		*fMixBufPtr++ = fLastClickRemovalRight;
 
-		// XXX: This may cause an issue if there is complete silence over a LONG time?
 		fLastClickRemovalLeft  -= fLastClickRemovalLeft  * (1.0f / 4096.0f);
 		fLastClickRemovalRight -= fLastClickRemovalRight * (1.0f / 4096.0f);
 	}
+	
+	MixTransferOffset = 0;
 
 	slaveChn_t *sc = sChn;
 	for (uint32_t i = 0; i < Driver.NumChannels; i++, sc++)
@@ -503,10 +497,7 @@ static void HQ_ResetMixer(void)
 	CurrentFractional = 0;
 	RandSeed = 0x12345000;
 	fLastClickRemovalLeft = fLastClickRemovalRight = 0.0f;
-
-#if !CPU_32BIT
-	dPrngStateL = dPrngStateR = 0.0;
-#endif
+	fPrngStateL = fPrngStateR = 0.0f;
 }
 
 static inline int32_t Random32(void)
@@ -521,42 +512,28 @@ static inline int32_t Random32(void)
 static int32_t HQ_PostMix(int16_t *AudioOut16, int32_t SamplesToOutput)
 {
 	int32_t out32;
-#if !CPU_32BIT
-	double dOut, dPrng;
-#endif
+	float fOut, fPrng;
 
 	int32_t SamplesTodo = (SamplesToOutput == 0) ? RealBytesToMix : SamplesToOutput;
 	for (int32_t i = 0; i < SamplesTodo; i++)
 	{
-#if CPU_32BIT // if 32-bit CPU, use single-precision float + no dithering (for speed)
-		// left channel
-		out32 = (int32_t)(fMixBuffer[MixTransferOffset++] * 32768.0f);
-		CLAMP16(out32);
-		*AudioOut16++ = (int16_t)out32;
-
-		// right channel
-		out32 = (int32_t)(fMixBuffer[MixTransferOffset++] * 32768.0f);
-		CLAMP16(out32);
-		*AudioOut16++ = (int16_t)out32;
-#else
 		// left channel - 1-bit triangular dithering
-		dPrng = Random32() * (0.5 / INT32_MAX); // -0.5 .. 0.5
-		dOut = (double)fMixBuffer[MixTransferOffset++] * 32768.0;
-		dOut = (dOut + dPrng) - dPrngStateL;
-		dPrngStateL = dPrng;
-		out32 = (int32_t)dOut;
+		fPrng = (float)Random32() * (0.5f / INT32_MAX); // -0.5f .. 0.5f
+		fOut = fMixBuffer[MixTransferOffset++] * 32768.0f;
+		fOut = (fOut + fPrng) - fPrngStateL;
+		fPrngStateL = fPrng;
+		out32 = (int32_t)fOut;
 		CLAMP16(out32);
 		*AudioOut16++ = (int16_t)out32;
 
 		// right channel - 1-bit triangular dithering
-		dPrng = Random32() * (0.5 / INT32_MAX); // -0.5 .. 0.5
-		dOut = (double)fMixBuffer[MixTransferOffset++] * 32768.0;
-		dOut = (dOut + dPrng) - dPrngStateR;
-		dPrngStateR = dPrng;
-		out32 = (int32_t)dOut;
+		fPrng = (float)Random32() * (0.5f / INT32_MAX); // -0.5f .. 0.5f
+		fOut = fMixBuffer[MixTransferOffset++] * 32768.0f;
+		fOut = (fOut + fPrng) - fPrngStateR;
+		fPrngStateR = fPrng;
+		out32 = (int32_t)fOut;
 		CLAMP16(out32);
 		*AudioOut16++ = (int16_t)out32;
-#endif
 	}
 
 	return SamplesTodo;
