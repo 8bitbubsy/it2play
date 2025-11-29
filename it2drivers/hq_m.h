@@ -8,8 +8,8 @@
 
 #define SINC_WIDTH 8
 #define SINC_WIDTH_BITS 3 /* log2(SINC_WIDTH) */
-#define SINC_PHASES 4096
-#define SINC_PHASES_BITS 12 /* log2(SINC_PHASES) */
+#define SINC_PHASES 8192
+#define SINC_PHASES_BITS 13 /* log2(SINC_PHASES) */
 
 #if CPU_32BIT /* note: mixer has 16-bit fractional precision if 32-bit */
 #define SINC_FSHIFT (16-(SINC_PHASES_BITS+SINC_WIDTH_BITS))
