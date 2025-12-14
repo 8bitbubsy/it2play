@@ -84,7 +84,7 @@ static bool InitWindowedSincLUT(void)
 
 	// sinc with Kaiser-Bessel window
 
-	const double kaiserBeta = 3.0 * PI;
+	const double kaiserBeta = 9.6377; // lower beta results in audible ringing in some cases
 
 	const double besselI0Beta = 1.0 / besselI0(kaiserBeta);
 	for (int32_t i = 0; i < SINC_WIDTH * SINC_PHASES; i++)
