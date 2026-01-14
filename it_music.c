@@ -2355,11 +2355,6 @@ static void WAV_WriteEnd(FILE *f, uint32_t size)
 	fwrite(&size, 4, 1, f);
 }
 
-void WAVRender_Abort(void)
-{
-	WAVRender_Flag = false;
-}
-
 bool Music_RenderToWAV(const char *filenameOut)
 {
 	const int32_t MaxSamplesToMix = (((Driver.MixSpeed << 1) + (Driver.MixSpeed >> 1)) / LOWEST_BPM_POSSIBLE) + 1;
