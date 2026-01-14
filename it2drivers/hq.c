@@ -78,7 +78,7 @@ static inline double sinc(double x)
 
 static bool InitWindowedSincLUT(void)
 {
-	Driver.fSincLUT = (float *)malloc(SINC_WIDTH * SINC_PHASES * sizeof (float));
+	Driver.fSincLUT = (float *)malloc(SINC_PHASES * SINC_WIDTH * sizeof (float));
 	if (Driver.fSincLUT == NULL)
 		return false;
 
@@ -87,7 +87,7 @@ static bool InitWindowedSincLUT(void)
 	const double kaiserBeta = 9.6377; // lower beta results in audible ringing in some cases
 
 	const double besselI0Beta = 1.0 / besselI0(kaiserBeta);
-	for (int32_t i = 0; i < SINC_WIDTH * SINC_PHASES; i++)
+	for (int32_t i = 0; i < SINC_PHASES * SINC_WIDTH; i++)
 	{
 		const double x = ((i & (SINC_WIDTH-1)) - ((SINC_WIDTH / 2) - 1)) - ((i >> SINC_WIDTH_BITS) * (1.0 / SINC_PHASES));
 
