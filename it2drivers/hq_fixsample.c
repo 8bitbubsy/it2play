@@ -7,13 +7,11 @@
 #include <stddef.h>
 #include "../it_structs.h"
 
-/* TODO:
-** The ping-pong sample fixer needs more work, some edge-cases are off.
-** If I remember correctly, it's only bugged for extremely short loops.
-*/
 void fixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 {
 	const int32_t LoopLength = sc->LoopEnd - sc->LoopBegin;
+	if (LoopLength <= 4) // This requires complicated logic. As this is rare, don't bother.
+		return;
 
 	if (sc->SmpIs16Bit)
 	{
@@ -26,37 +24,9 @@ void fixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 			sc->leftTmpSamples16[0] = loopBegin[-1];
 			sc->leftTmpSamples16[1] = loopBegin[-2];
 			sc->leftTmpSamples16[2] = loopBegin[-3];
-
-			if (LoopLength >= 4)
-			{
-				loopBegin[-1] = loopBegin[0];
-				loopBegin[-2] = loopBegin[1];
-				loopBegin[-3] = loopBegin[2];
-			}
-			else
-			{
-				// loop is too short, some logic is needed (XXX: I think this is broken?)
-				bool backwards = false;
-				int32_t offset = sc->LoopBegin;
-				for (int32_t i = 0; i < 3; i++)
-				{
-					if (backwards)
-					{
-						if (offset < sc->LoopBegin) { offset = sc->LoopBegin; backwards ^= 1; }
-					}
-					else
-					{
-						if (offset >= sc->LoopEnd) { offset = sc->LoopEnd - 1; backwards ^= 1; }
-					}
-
-					*--loopBegin = ptr[offset];
-
-					if (backwards)
-						offset--;
-					else
-						offset++;
-				}
-			}
+			loopBegin[-1] = loopBegin[0];
+			loopBegin[-2] = loopBegin[1];
+			loopBegin[-3] = loopBegin[2];
 		}
 		else
 		{
@@ -108,6 +78,8 @@ void fixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 	}
 	else
 	{
+		// 8-BIT SAMPLE
+
 		int8_t *ptr = (int8_t *)s->Data;
 		int8_t *loopBegin = (int8_t *)s->Data + sc->LoopBegin;
 		int8_t *loopEnd = (int8_t *)s->Data + sc->LoopEnd;
@@ -151,6 +123,7 @@ void fixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 				loopBegin[-1] = loopBegin[0];
 				loopBegin[-2] = loopBegin[1];
 				loopBegin[-3] = loopBegin[2];
+		
 			}
 			else
 			{
@@ -173,6 +146,10 @@ void fixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 
 void unfixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 {
+	const int32_t LoopLength = sc->LoopEnd - sc->LoopBegin;
+	if (LoopLength <= 4) // This requires complicated logic. As this is rare, don't bother.
+		return;
+
 	if (sc->SmpIs16Bit)
 	{
 		int16_t *loopEnd = (int16_t *)s->Data + sc->LoopEnd;
@@ -248,6 +225,8 @@ void unfixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 {
 	const int32_t LoopLength = sc->LoopEnd - sc->LoopBegin;
+	if (LoopLength <= 4) // This requires complicated logic. As this is rare, don't bother.
+		return;
 
 	if (sc->SmpIs16Bit)
 	{
@@ -260,26 +239,9 @@ void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 			sc->leftTmpSamples16[0] = loopBegin[-1];
 			sc->leftTmpSamples16[1] = loopBegin[-2];
 			sc->leftTmpSamples16[2] = loopBegin[-3];
-
-			if (LoopLength >= 4)
-			{
-				loopBegin[-1] = loopEnd[-1];
-				loopBegin[-2] = loopEnd[-2];
-				loopBegin[-3] = loopEnd[-3];
-			}
-			else
-			{
-				// loop is too short, some logic is needed
-				int32_t offset = sc->LoopEnd - 1;
-				if (offset < sc->LoopBegin) offset += LoopLength;
-				loopBegin[-1] = ptr[offset];
-				offset--;
-				if (offset < sc->LoopBegin) offset += LoopLength;
-				loopBegin[-2] = ptr[offset];
-				offset--;
-				if (offset < sc->LoopBegin) offset += LoopLength;
-				loopBegin[-3] = ptr[offset];
-			}
+			loopBegin[-1] = loopEnd[-1];
+			loopBegin[-2] = loopEnd[-2];
+			loopBegin[-3] = loopEnd[-3];
 		}
 		else
 		{
@@ -292,27 +254,10 @@ void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 		sc->rightTmpSamples16[1] = loopEnd[1];
 		sc->rightTmpSamples16[2] = loopEnd[2];
 		sc->rightTmpSamples16[3] = loopEnd[3];
-
 		loopEnd[0] = loopBegin[0];
-		if (LoopLength >= 4)
-		{
-			loopEnd[1] = loopBegin[1];
-			loopEnd[2] = loopBegin[2];
-			loopEnd[3] = loopBegin[3];
-		}
-		else
-		{
-			// loop is too short, some logic is needed
-			int32_t offset = sc->LoopBegin + 1;
-			if (offset >= sc->LoopEnd) offset -= LoopLength;
-			loopEnd[1] = ptr[offset];
-			offset++;
-			if (offset >= sc->LoopEnd) offset -= LoopLength;
-			loopEnd[2] = ptr[offset];
-			offset++;
-			if (offset >= sc->LoopEnd) offset -= LoopLength;
-			loopEnd[3] = ptr[offset];
-		}
+		loopEnd[1] = loopBegin[1];
+		loopEnd[2] = loopBegin[2];
+		loopEnd[3] = loopBegin[3];
 
 		if (s->DataR != NULL) // right sample (if present)
 		{
@@ -325,26 +270,9 @@ void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 				sc->leftTmpSamples16_R[0] = loopBegin[-1];
 				sc->leftTmpSamples16_R[1] = loopBegin[-2];
 				sc->leftTmpSamples16_R[2] = loopBegin[-3];
-
-				if (LoopLength >= 4)
-				{
-					loopBegin[-1] = loopEnd[-1];
-					loopBegin[-2] = loopEnd[-2];
-					loopBegin[-3] = loopEnd[-3];
-				}
-				else
-				{
-					// loop is too short, some logic is needed
-					int32_t offset = sc->LoopEnd - 1;
-					if (offset < sc->LoopBegin) offset += LoopLength;
-					loopBegin[-1] = ptr[offset];
-					offset--;
-					if (offset < sc->LoopBegin) offset += LoopLength;
-					loopBegin[-2] = ptr[offset];
-					offset--;
-					if (offset < sc->LoopBegin) offset += LoopLength;
-					loopBegin[-3] = ptr[offset];
-				}
+				loopBegin[-1] = loopEnd[-1];
+				loopBegin[-2] = loopEnd[-2];
+				loopBegin[-3] = loopEnd[-3];
 			}
 			else
 			{
@@ -357,27 +285,10 @@ void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 			sc->rightTmpSamples16_R[1] = loopEnd[1];
 			sc->rightTmpSamples16_R[2] = loopEnd[2];
 			sc->rightTmpSamples16_R[3] = loopEnd[3];
-
 			loopEnd[0] = loopBegin[0];
-			if (LoopLength >= 4)
-			{
-				loopEnd[1] = loopBegin[1];
-				loopEnd[2] = loopBegin[2];
-				loopEnd[3] = loopBegin[3];
-			}
-			else
-			{
-				// loop is too short, some logic is needed
-				int32_t offset = sc->LoopBegin + 1;
-				if (offset >= sc->LoopEnd) offset -= LoopLength;
-				loopEnd[1] = ptr[offset];
-				offset++;
-				if (offset >= sc->LoopEnd) offset -= LoopLength;
-				loopEnd[2] = ptr[offset];
-				offset++;
-				if (offset >= sc->LoopEnd) offset -= LoopLength;
-				loopEnd[3] = ptr[offset];
-			}
+			loopEnd[1] = loopBegin[1];
+			loopEnd[2] = loopBegin[2];
+			loopEnd[3] = loopBegin[3];
 		}
 	}
 	else
@@ -391,26 +302,9 @@ void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 			sc->leftTmpSamples8[0] = loopBegin[-1];
 			sc->leftTmpSamples8[1] = loopBegin[-2];
 			sc->leftTmpSamples8[2] = loopBegin[-3];
-
-			if (LoopLength >= 4)
-			{
-				loopBegin[-1] = loopEnd[-1];
-				loopBegin[-2] = loopEnd[-2];
-				loopBegin[-3] = loopEnd[-3];
-			}
-			else
-			{
-				// loop is too short, some logic is needed
-				int32_t offset = sc->LoopEnd - 1;
-				if (offset < sc->LoopBegin) offset += LoopLength;
-				loopBegin[-1] = ptr[offset];
-				offset--;
-				if (offset < sc->LoopBegin) offset += LoopLength;
-				loopBegin[-2] = ptr[offset];
-				offset--;
-				if (offset < sc->LoopBegin) offset += LoopLength;
-				loopBegin[-3] = ptr[offset];
-			}
+			loopBegin[-1] = loopEnd[-1];
+			loopBegin[-2] = loopEnd[-2];
+			loopBegin[-3] = loopEnd[-3];
 		}
 		else
 		{
@@ -423,27 +317,10 @@ void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 		sc->rightTmpSamples8[1] = loopEnd[1];
 		sc->rightTmpSamples8[2] = loopEnd[2];
 		sc->rightTmpSamples8[3] = loopEnd[3];
-
 		loopEnd[0] = loopBegin[0];
-		if (LoopLength >= 4)
-		{
-			loopEnd[1] = loopBegin[1];
-			loopEnd[2] = loopBegin[2];
-			loopEnd[3] = loopBegin[3];
-		}
-		else
-		{
-			// loop is too short, some logic is needed
-			int32_t offset = sc->LoopBegin + 1;
-			if (offset >= sc->LoopEnd) offset -= LoopLength;
-			loopEnd[1] = ptr[offset];
-			offset++;
-			if (offset >= sc->LoopEnd) offset -= LoopLength;
-			loopEnd[2] = ptr[offset];
-			offset++;
-			if (offset >= sc->LoopEnd) offset -= LoopLength;
-			loopEnd[3] = ptr[offset];
-		}
+		loopEnd[1] = loopBegin[1];
+		loopEnd[2] = loopBegin[2];
+		loopEnd[3] = loopBegin[3];
 
 		if (s->DataR != NULL) // right sample (if present)
 		{
@@ -456,26 +333,9 @@ void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 				sc->leftTmpSamples8_R[0] = loopBegin[-1];
 				sc->leftTmpSamples8_R[1] = loopBegin[-2];
 				sc->leftTmpSamples8_R[2] = loopBegin[-3];
-
-				if (LoopLength >= 4)
-				{
-					loopBegin[-1] = loopEnd[-1];
-					loopBegin[-2] = loopEnd[-2];
-					loopBegin[-3] = loopEnd[-3];
-				}
-				else
-				{
-					// loop is too short, some logic is needed
-					int32_t offset = sc->LoopEnd - 1;
-					if (offset < sc->LoopBegin) offset += LoopLength;
-					loopBegin[-1] = ptr[offset];
-					offset--;
-					if (offset < sc->LoopBegin) offset += LoopLength;
-					loopBegin[-2] = ptr[offset];
-					offset--;
-					if (offset < sc->LoopBegin) offset += LoopLength;
-					loopBegin[-3] = ptr[offset];
-				}
+				loopBegin[-1] = loopEnd[-1];
+				loopBegin[-2] = loopEnd[-2];
+				loopBegin[-3] = loopEnd[-3];
 			}
 			else
 			{
@@ -488,33 +348,20 @@ void fixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 			sc->rightTmpSamples8_R[1] = loopEnd[1];
 			sc->rightTmpSamples8_R[2] = loopEnd[2];
 			sc->rightTmpSamples8_R[3] = loopEnd[3];
-
 			loopEnd[0] = loopBegin[0];
-			if (LoopLength >= 4)
-			{
-				loopEnd[1] = loopBegin[1];
-				loopEnd[2] = loopBegin[2];
-				loopEnd[3] = loopBegin[3];
-			}
-			else
-			{
-				// loop is too short, some logic is needed
-				int32_t offset = sc->LoopBegin + 1;
-				if (offset >= sc->LoopEnd) offset -= LoopLength;
-				loopEnd[1] = ptr[offset];
-				offset++;
-				if (offset >= sc->LoopEnd) offset -= LoopLength;
-				loopEnd[2] = ptr[offset];
-				offset++;
-				if (offset >= sc->LoopEnd) offset -= LoopLength;
-				loopEnd[3] = ptr[offset];
-			}
+			loopEnd[1] = loopBegin[1];
+			loopEnd[2] = loopBegin[2];
+			loopEnd[3] = loopBegin[3];
 		}
 	}
 }
 
 void unfixSamplesFwdLoop(sample_t *s, slaveChn_t *sc)
 {
+	const int32_t LoopLength = sc->LoopEnd - sc->LoopBegin;
+	if (LoopLength <= 4) // This requires complicated logic. As this is rare, don't bother.
+		return;
+
 	if (sc->SmpIs16Bit)
 	{
 		int16_t *loopEnd = (int16_t *)s->Data + sc->LoopEnd;
@@ -591,12 +438,12 @@ void fixSamplesNoLoop(sample_t *s, slaveChn_t *sc)
 {
 	if (sc->SmpIs16Bit)
 	{
-		int16_t *begin = (int16_t *)s->Data;
+		int16_t *data = (int16_t *)s->Data;
 		int16_t *end = (int16_t *)s->Data + sc->LoopEnd;
 
-		begin[-1] = begin[0];
-		begin[-2] = begin[0];
-		begin[-3] = begin[0];
+		data[-1] = data[0];
+		data[-2] = data[0];
+		data[-3] = data[0];
 		end[0] = end[-1];
 		end[1] = end[-1];
 		end[2] = end[-1];
@@ -604,12 +451,12 @@ void fixSamplesNoLoop(sample_t *s, slaveChn_t *sc)
 
 		if (s->DataR != NULL) // right sample (if present)
 		{
-			begin = (int16_t *)s->DataR;
+			data = (int16_t *)s->DataR;
 			end = (int16_t *)s->DataR + sc->LoopEnd;
 
-			begin[-1] = begin[0];
-			begin[-2] = begin[0];
-			begin[-3] = begin[0];
+			data[-1] = data[0];
+			data[-2] = data[0];
+			data[-3] = data[0];
 			end[0] = end[-1];
 			end[1] = end[-1];
 			end[2] = end[-1];
@@ -618,12 +465,12 @@ void fixSamplesNoLoop(sample_t *s, slaveChn_t *sc)
 	}
 	else
 	{
-		int8_t *begin = (int8_t *)s->Data;
+		int8_t *data = (int8_t *)s->Data;
 		int8_t *end = (int8_t *)s->Data + sc->LoopEnd;
 
-		begin[-1] = begin[0];
-		begin[-2] = begin[0];
-		begin[-3] = begin[0];
+		data[-1] = data[0];
+		data[-2] = data[0];
+		data[-3] = data[0];
 		end[0] = end[-1];
 		end[1] = end[-1];
 		end[2] = end[-1];
@@ -631,12 +478,12 @@ void fixSamplesNoLoop(sample_t *s, slaveChn_t *sc)
 
 		if (s->DataR != NULL) // right sample (if present)
 		{
-			begin = (int8_t *)s->DataR;
+			data = (int8_t *)s->DataR;
 			end = (int8_t *)s->DataR + sc->LoopEnd;
 
-			begin[-1] = begin[0];
-			begin[-2] = begin[0];
-			begin[-3] = begin[0];
+			data[-1] = data[0];
+			data[-2] = data[0];
+			data[-3] = data[0];
 			end[0] = end[-1];
 			end[1] = end[-1];
 			end[2] = end[-1];
