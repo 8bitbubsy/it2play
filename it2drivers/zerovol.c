@@ -9,7 +9,6 @@
 
 #include <assert.h>
 #include <stdint.h>
-#include "../cpu.h"
 #include "../it_structs.h"
 #include "../it_music.h"
 
@@ -17,7 +16,7 @@ void UpdateNoLoop(slaveChn_t *sc, uint32_t numSamples)
 {
 	uint32_t SamplingPosition = sc->SamplingPosition;
 
-	const uint64_t Delta = (uint64_t)sc->Delta32 * (uint32_t)numSamples;
+	const uint64_t Delta = (uint64_t)sc->Delta32 * numSamples;
 	const uint32_t IntSamples = (uint32_t)(Delta >> MIX_FRAC_BITS);
 	const uint16_t FracSamples = Delta & MIX_FRAC_MASK;
 
@@ -41,7 +40,7 @@ void UpdateNoLoop(slaveChn_t *sc, uint32_t numSamples)
 
 void UpdateForwardsLoop(slaveChn_t *sc, uint32_t numSamples)
 {
-	const uint64_t Delta = (uint64_t)sc->Delta32 * (uint32_t)numSamples;
+	const uint64_t Delta = (uint64_t)sc->Delta32 * numSamples;
 	const uint32_t IntSamples = (uint32_t)(Delta >> MIX_FRAC_BITS);
 	const uint16_t FracSamples = Delta & MIX_FRAC_MASK;
 
@@ -64,7 +63,7 @@ void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 {
 	assert(numSamples <= UINT16_MAX);
 
-	const uint64_t Delta = (uint64_t)sc->Delta32 * (uint32_t)numSamples;
+	const uint64_t Delta = (uint64_t)sc->Delta32 * numSamples;
 	const uint32_t IntSamples = (uint32_t)(Delta >> MIX_FRAC_BITS);
 	const uint16_t FracSamples = Delta & MIX_FRAC_MASK;
 
@@ -122,17 +121,7 @@ void UpdateNoLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 {
 	uint32_t SamplingPosition = sc->SamplingPosition;
 
-#if CPU_32BIT
-	const uint64_t Delta = (uint64_t)sc->Delta32 * (uint32_t)numSamples;
-	const uint32_t IntSamples = (uint32_t)(Delta >> MIX_FRAC_BITS);
-	const uint16_t FracSamples = Delta & MIX_FRAC_MASK;
-
-	sc->Frac32 += FracSamples;
-	SamplingPosition += sc->Frac32 >> MIX_FRAC_BITS;
-	SamplingPosition += IntSamples;
-	sc->Frac32 &= MIX_FRAC_MASK;
-#else
-	const uint64_t Delta = (uint64_t)sc->Delta64 * (uint64_t)numSamples;
+	const uint64_t Delta = (uint64_t)sc->Delta64 * numSamples;
 	const uint32_t IntSamples = (uint32_t)(Delta >> 32);
 	const uint32_t FracSamples = Delta & UINT32_MAX;
 
@@ -140,7 +129,6 @@ void UpdateNoLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 	SamplingPosition += sc->Frac64 >> 32;
 	SamplingPosition += IntSamples;
 	sc->Frac64 &= UINT32_MAX;
-#endif
 
 	if (SamplingPosition >= (uint32_t)sc->LoopEnd)
 	{
@@ -157,25 +145,14 @@ void UpdateNoLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 
 void UpdateForwardsLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 {
-#if CPU_32BIT
-	const uint64_t Delta = (uint64_t)sc->Delta32 * (uint32_t)numSamples;
-	const uint32_t IntSamples = (uint32_t)(Delta >> MIX_FRAC_BITS);
-	const uint16_t FracSamples = Delta & MIX_FRAC_MASK;
-
-	sc->Frac32 += FracSamples;
-	sc->SamplingPosition += sc->Frac32 >> MIX_FRAC_BITS;
-	sc->SamplingPosition += IntSamples;
-	sc->Frac32 &= MIX_FRAC_MASK;
-#else
-	const uint64_t Delta = (uint64_t)sc->Delta64 * (uint64_t)numSamples;
-	const uint32_t IntSamples = (uint32_t)(Delta >> 32);
+	const uint64_t Delta = (uint64_t)sc->Delta64 * numSamples;
+	const uint32_t IntSamples = Delta >> 32;
 	const uint32_t FracSamples = Delta & UINT32_MAX;
 
 	sc->Frac64 += FracSamples;
 	sc->SamplingPosition += sc->Frac64 >> 32;
 	sc->SamplingPosition += IntSamples;
 	sc->Frac64 &= UINT32_MAX;
-#endif
 
 	if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 	{
@@ -191,31 +168,18 @@ void UpdateForwardsLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 
 void UpdatePingPongLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 {
-#if CPU_32BIT
-	const uint64_t Delta = (uint64_t)sc->Delta32 * (uint32_t)numSamples;
-	const uint32_t IntSamples = (uint32_t)(Delta >> MIX_FRAC_BITS);
-	const uint16_t FracSamples = Delta & MIX_FRAC_MASK;
-#else
-	const uint64_t Delta = (uint64_t)sc->Delta64 * (uint64_t)numSamples;
-	const uint32_t IntSamples = (uint32_t)(Delta >> 32);
+	const uint64_t Delta = (uint64_t)sc->Delta64 * numSamples;
+	const uint32_t IntSamples = Delta >> 32;
 	const uint32_t FracSamples = Delta & UINT32_MAX;
-#endif
 
 	const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin;
 
 	if (sc->LoopDirection == DIR_BACKWARDS)
 	{
-#if CPU_32BIT
-		sc->Frac32 -= FracSamples;
-		sc->SamplingPosition += (int32_t)sc->Frac32 >> MIX_FRAC_BITS;
-		sc->SamplingPosition -= IntSamples;
-		sc->Frac32 &= MIX_FRAC_MASK;
-#else
 		sc->Frac64 -= FracSamples;
-		sc->SamplingPosition += (int64_t)sc->Frac64 >> 32;
+		sc->SamplingPosition += (int32_t)(sc->Frac64 >> 32);
 		sc->SamplingPosition -= IntSamples;
 		sc->Frac64 &= UINT32_MAX;
-#endif
 
 		if (sc->SamplingPosition <= sc->LoopBegin)
 		{
@@ -227,22 +191,14 @@ void UpdatePingPongLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 				if (sc->SamplingPosition == sc->LoopBegin)
 				{
 					sc->LoopDirection = DIR_FORWARDS;
-#if CPU_32BIT
-					sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-#else
 					sc->Frac64 = (uint32_t)(0 - sc->Frac64);
-#endif
 				}
 			}
 			else
 			{
 				sc->LoopDirection = DIR_FORWARDS;
 				sc->SamplingPosition = sc->LoopBegin + NewLoopPos;
-#if CPU_32BIT
-				sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-#else
 				sc->Frac64 = (uint32_t)(0 - sc->Frac64);
-#endif
 			}
 
 			sc->HasLooped = true;
@@ -250,17 +206,10 @@ void UpdatePingPongLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 	}
 	else // 8bb: forwards
 	{
-#if CPU_32BIT
-		sc->Frac32 += FracSamples;
-		sc->SamplingPosition += (int32_t)sc->Frac32 >> MIX_FRAC_BITS;
-		sc->SamplingPosition += IntSamples;
-		sc->Frac32 &= MIX_FRAC_MASK;
-#else
 		sc->Frac64 += FracSamples;
-		sc->SamplingPosition += (int64_t)sc->Frac64 >> 32;
+		sc->SamplingPosition += (int32_t)(sc->Frac64 >> 32);
 		sc->SamplingPosition += IntSamples;
 		sc->Frac64 &= UINT32_MAX;
-#endif
 
 		if ((uint32_t)sc->SamplingPosition >= (uint32_t)sc->LoopEnd)
 		{
@@ -275,11 +224,7 @@ void UpdatePingPongLoopHQ(slaveChn_t *sc, uint32_t numSamples)
 				if (sc->SamplingPosition != sc->LoopBegin)
 				{
 					sc->LoopDirection = DIR_BACKWARDS;
-#if CPU_32BIT
-					sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-#else
 					sc->Frac64 = (uint32_t)(0 - sc->Frac64);
-#endif
 				}
 			}
 

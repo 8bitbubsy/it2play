@@ -7,10 +7,8 @@
 ** Features:
 ** - 8-tap windowed-sinc interpolation
 ** - Stereo sample support
-** - 32.32 fixed-point sampling precision (32.16 if 32-bit CPU, for speed)
+** - 32.32 fixed-point sampling precision
 ** - Ended non-looping samples are ramped out, like the WAV writer driver
-**
-** Compiling for 64-bit is ideal as it results in higher-precision voice frequencies.
 */
 
 #include <assert.h>
@@ -19,7 +17,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "../cpu.h"
 #include "../it_structs.h"
 #include "../it_music.h" // Update()
 #include "hq_m.h"
@@ -152,13 +149,8 @@ static void HQ_MixSamples(void)
 				continue;
 			}
 
-#if CPU_32BIT
-			// mixer delta (16.16fp)
-			sc->Delta32 = (uint32_t)(((int64_t)sc->Frequency * FreqMulVal) >> (16+FREQ_MUL_EXTRA_BITS));
-#else
 			// mixer delta (32.32fp)
 			sc->Delta64 = ((int64_t)sc->Frequency * FreqMulVal) >> FREQ_MUL_EXTRA_BITS;
-#endif
 		}
 
 		if (sc->Flags & SF_NEW_NOTE)
@@ -229,11 +221,7 @@ static void HQ_MixSamples(void)
 		}
 
 		// just in case (shouldn't happen)
-#if CPU_32BIT
-		if (sc->Delta32 == 0)
-#else
 		if (sc->Delta64 == 0)
-#endif
 			continue;
 
 		uint32_t MixBlockSize = RealBytesToMix;
@@ -279,51 +267,23 @@ static void HQ_MixSamples(void)
 							if (sc->SamplingPosition == sc->LoopBegin)
 							{
 								sc->LoopDirection = DIR_FORWARDS;
-#if CPU_32BIT
-								sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-#else
 								sc->Frac64 = (uint32_t)(0 - sc->Frac64);
-#endif
 								SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
-#if CPU_32BIT
-								if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
-									SamplesToMix = UINT16_MAX;
-
-								SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
-								Driver.Delta32 = sc->Delta32;
-#else
 								SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | ((uint32_t)sc->Frac64 ^ UINT32_MAX)) / sc->Delta64) + 1);
 								Driver.Delta64 = sc->Delta64;
-#endif
 							}
 							else
 							{
 								SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
-#if CPU_32BIT
-								if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
-									SamplesToMix = UINT16_MAX;
-
-								SamplesToMix = (((SamplesToMix << 16) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
-								Driver.Delta32 = 0 - sc->Delta32;
-#else
 								SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | (uint32_t)sc->Frac64) / sc->Delta64) + 1);
 								Driver.Delta64 = 0 - sc->Delta64;
-#endif
 							}
 						}
 						else // forwards
 						{
 							SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
-#if CPU_32BIT
-							if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
-								SamplesToMix = UINT16_MAX;
-
-							SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
-							Driver.Delta32 = sc->Delta32;
-#else
 							SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | ((uint32_t)sc->Frac64 ^ UINT32_MAX)) / sc->Delta64) + 1);
 							Driver.Delta64 = sc->Delta64;
-#endif
 						}
 
 						if (SamplesToMix > MixBlockSize)
@@ -348,22 +308,14 @@ static void HQ_MixSamples(void)
 									if (sc->SamplingPosition == sc->LoopBegin)
 									{
 										sc->LoopDirection = DIR_FORWARDS;
-#if CPU_32BIT
-										sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-#else
 										sc->Frac64 = (uint32_t)(0 - sc->Frac64);
-#endif
 									}
 								}
 								else
 								{
 									sc->LoopDirection = DIR_FORWARDS;
 									sc->SamplingPosition = sc->LoopBegin + NewLoopPos;
-#if CPU_32BIT
-									sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-#else
 									sc->Frac64 = (uint32_t)(0 - sc->Frac64);
-#endif
 								}
 
 								sc->HasLooped = true;
@@ -384,11 +336,7 @@ static void HQ_MixSamples(void)
 									if (sc->SamplingPosition != sc->LoopBegin)
 									{
 										sc->LoopDirection = DIR_BACKWARDS;
-#if CPU_32BIT
-										sc->Frac32 = (uint16_t)(0 - sc->Frac32);
-#else
 										sc->Frac64 = (uint32_t)(0 - sc->Frac64);
-#endif
 									}
 								}
 
@@ -402,16 +350,9 @@ static void HQ_MixSamples(void)
 					while (MixBlockSize > 0)
 					{
 						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
-#if CPU_32BIT
-						if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
-							SamplesToMix = UINT16_MAX;
-
-						SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
-						Driver.Delta32 = sc->Delta32;
-#else
 						SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | ((uint32_t)sc->Frac64 ^ UINT32_MAX)) / sc->Delta64) + 1);
 						Driver.Delta64 = sc->Delta64;
-#endif
+
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 
@@ -434,16 +375,9 @@ static void HQ_MixSamples(void)
 					while (MixBlockSize > 0)
 					{
 						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
-#if CPU_32BIT
-						if (SamplesToMix > UINT16_MAX) // limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
-							SamplesToMix = UINT16_MAX;
-
-						SamplesToMix = (((SamplesToMix << 16) | (uint16_t)(sc->Frac32 ^ UINT16_MAX)) / sc->Delta32) + 1;
-						Driver.Delta32 = sc->Delta32;
-#else
 						SamplesToMix = (uint32_t)(((((uint64_t)SamplesToMix << 32) | ((uint32_t)sc->Frac64 ^ UINT32_MAX)) / sc->Delta64) + 1);
 						Driver.Delta64 = sc->Delta64;
-#endif
+
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 
@@ -607,11 +541,7 @@ static void HQ_CloseDriver(void)
 bool HQ_InitDriver(int32_t mixingFrequency)
 {
 	// 32769Hz is absolute lowest (for FreqMulVal to fit in INT32_MAX)
-#if CPU_32BIT
-	mixingFrequency = CLAMP(mixingFrequency, 32769, 64000);
-#else
 	mixingFrequency = CLAMP(mixingFrequency, 32769, 768000);
-#endif
 
 	FreqMulVal = (int32_t)round((double)(1ULL << (32+FREQ_MUL_EXTRA_BITS)) / mixingFrequency);
 

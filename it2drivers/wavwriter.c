@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "../cpu.h"
 #include "../it_structs.h"
 #include "../it_music.h" // Update()
 #include "wavwriter_m.h"
@@ -262,32 +261,20 @@ static void WAVWriter_MixSamples(void)
 								sc->Frac32 = (uint16_t)(0 - sc->Frac32);
 
 								SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
-#if CPU_32BIT
-								if (SamplesToMix > UINT16_MAX)
-									SamplesToMix = UINT16_MAX;
-#endif
-								SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
+								SamplesToMix = ((((uint64_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
 								Driver.Delta32 = sc->Delta32;
 							}
 							else
 							{
 								SamplesToMix = sc->SamplingPosition - (sc->LoopBegin + 1);
-#if CPU_32BIT
-								if (SamplesToMix > UINT16_MAX) // 8bb: limit it so we can do a hardware 32-bit div (instead of slow software 64-bit div)
-									SamplesToMix = UINT16_MAX;
-#endif
-								SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
+								SamplesToMix = ((((uint64_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)sc->Frac32) / sc->Delta32) + 1;
 								Driver.Delta32 = 0 - sc->Delta32;
 							}
 						}
 						else // 8bb: forwards
 						{
 							SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
-#if CPU_32BIT
-							if (SamplesToMix > UINT16_MAX)
-								SamplesToMix = UINT16_MAX;
-#endif
-							SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
+							SamplesToMix = ((((uint64_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
 							Driver.Delta32 = sc->Delta32;
 						}
 
@@ -348,11 +335,7 @@ static void WAVWriter_MixSamples(void)
 					while (MixBlockSize > 0)
 					{
 						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
-#if CPU_32BIT
-						if (SamplesToMix > UINT16_MAX)
-							SamplesToMix = UINT16_MAX;
-#endif
-						SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
+						SamplesToMix = ((((uint64_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 
@@ -371,11 +354,7 @@ static void WAVWriter_MixSamples(void)
 					while (MixBlockSize > 0)
 					{
 						uint32_t SamplesToMix = (sc->LoopEnd - 1) - sc->SamplingPosition;
-#if CPU_32BIT
-						if (SamplesToMix > UINT16_MAX)
-							SamplesToMix = UINT16_MAX;
-#endif
-						SamplesToMix = ((((uintCPUWord_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
+						SamplesToMix = ((((uint64_t)SamplesToMix << MIX_FRAC_BITS) | (uint16_t)(sc->Frac32 ^ MIX_FRAC_MASK)) / sc->Delta32) + 1;
 						if (SamplesToMix > MixBlockSize)
 							SamplesToMix = MixBlockSize;
 

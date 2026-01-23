@@ -123,7 +123,6 @@
     <ClInclude Include="..\..\it2drivers\sb16mmx.h">
       <Filter>it2drivers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\cpu.h" />
     <ClInclude Include="..\..\it2drivers\hq_fixsample.h">
       <Filter>it2drivers</Filter>
     </ClInclude>

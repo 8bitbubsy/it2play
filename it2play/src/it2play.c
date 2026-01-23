@@ -7,7 +7,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "../../cpu.h"
 #include "../../it_d_rm.h"
 #include "../../it_music.h"
 #include "../../it_structs.h"
@@ -146,9 +145,6 @@ int main(int argc, char *argv[])
 	Music_PlaySong(0);
 
 	printf("Press ESC to stop...");
-#if CPU_32BIT
-	printf(" (note: 32-bit. Compile for 64-bit for higher precision!)");
-#endif
 	printf("\n\n");
 	printf("Controls:\n");
 	printf(" Esc=Quit   Plus = inc. song pos   Minus = dec. song pos\n");
@@ -196,11 +192,7 @@ int main(int argc, char *argv[])
 			activeVoices, peakVoices);
 		fflush(stdout);
 
-#if CPU_32BIT
-		Sleep(35);
-#else
 		Sleep(25);
-#endif
 	}
 
 #ifndef _WIN32

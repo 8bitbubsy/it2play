@@ -43,7 +43,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\audiodrivers\winmm\winmm.h" />
-    <ClInclude Include="..\..\cpu.h" />
     <ClInclude Include="..\..\it2drivers\hq.h" />
     <ClInclude Include="..\..\it2drivers\hq_fixsample.h" />
     <ClInclude Include="..\..\it2drivers\hq_m.h" />
