@@ -117,9 +117,9 @@ void fixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 			sc->leftTmpSamples8[0] = loopBegin[-1];
 			sc->leftTmpSamples8[1] = loopBegin[-2];
 			sc->leftTmpSamples8[2] = loopBegin[-3];
-			loopBegin[-1] = loopEnd[-1];
-			loopBegin[-2] = loopEnd[-2];
-			loopBegin[-3] = loopEnd[-3];
+			loopBegin[-1] = loopBegin[0];
+			loopBegin[-2] = loopBegin[1];
+			loopBegin[-3] = loopBegin[2];
 		}
 		else
 		{
@@ -148,9 +148,9 @@ void fixSamplesPingpong(sample_t *s, slaveChn_t *sc)
 				sc->leftTmpSamples8_R[0] = loopBegin[-1];
 				sc->leftTmpSamples8_R[1] = loopBegin[-2];
 				sc->leftTmpSamples8_R[2] = loopBegin[-3];
-				loopBegin[-1] = loopEnd[-1];
-				loopBegin[-2] = loopEnd[-2];
-				loopBegin[-3] = loopEnd[-3];
+				loopBegin[-1] = loopBegin[0];
+				loopBegin[-2] = loopBegin[1];
+				loopBegin[-3] = loopBegin[2];
 			}
 			else
 			{
