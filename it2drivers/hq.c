@@ -145,16 +145,16 @@ static bool CreateWindowedSincKernel(void)
 	if (Driver.fSincLUT == NULL)
 		return false;
 
-	const double kaiserBeta = 9.6377; // lower beta results in audible ringing in some cases
-	const double besselI0BetaReciprocal = 1.0 / besselI0(kaiserBeta);
+	const double kaiserBeta = 9.6; // lower beta results in audible ringing in some cases
 
+	const double besselI0BetaMul = 1.0 / besselI0(kaiserBeta);
 	for (int32_t i = 0; i < SINC_PHASES * SINC_WIDTH; i++)
 	{
 		const double x = ((i & (SINC_WIDTH-1)) - ((SINC_WIDTH / 2) - 1)) - ((i >> SINC_WIDTH_BITS) * (1.0 / SINC_PHASES));
 
 		// Kaiser-Bessel window
 		const double n = x * (1.0 / (SINC_WIDTH / 2));
-		const double window = besselI0(kaiserBeta * sqrt(1.0 - n * n)) * besselI0BetaReciprocal;
+		const double window = besselI0(kaiserBeta * sqrt(1.0 - n * n)) * besselI0BetaMul;
 
 		Driver.fSincLUT[i] = (float)(sinc(x) * window);
 	}
@@ -618,9 +618,10 @@ bool HQ_InitDriver(int32_t mixingFrequency)
 	Driver.Type = DRIVER_HQ;
 
 	// calculate samples-per-tick tables
+	const double dMixFreq25 = Driver.MixFrequency * 2.5;
 	for (int32_t bpm = MIN_BPM; bpm <= MAX_BPM; bpm++)
 	{
-		const double dSamplesPerTick = (Driver.MixFrequency * 2.5) / bpm;
+		const double dSamplesPerTick = dMixFreq25 / bpm;
 		const uint64_t samplesPerTickFp = (uint64_t)((dSamplesPerTick * BPM_FRAC_SCALE) + 0.5); // rounded
 
 		const uint32_t i = bpm - MIN_BPM;
