@@ -14,8 +14,6 @@
 #include "../it_structs.h"
 #include "../it_d_rm.h"
 
-static uint8_t lastErr;
-
 static void Decompress16BitData(int16_t *Dst, const uint8_t *Src, uint32_t BlockLen);
 static void Decompress8BitData(int8_t *Dst, const uint8_t *Src, uint32_t BlockLen);
 static bool LoadCompressed16BitSample(MEMFILE *m, sample_t *s, bool Stereo, bool DeltaEncoded);
