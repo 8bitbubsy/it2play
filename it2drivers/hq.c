@@ -145,7 +145,7 @@ static bool CreateWindowedSincKernel(void)
 	if (Driver.fSincLUT == NULL)
 		return false;
 
-	const double kaiserBeta = 9.6; // lower beta results in audible ringing in some cases
+	const double kaiserBeta = 9.6377;
 
 	const double besselI0BetaMul = 1.0 / besselI0(kaiserBeta);
 	for (int32_t i = 0; i < SINC_PHASES * SINC_WIDTH; i++)
