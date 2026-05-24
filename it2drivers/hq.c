@@ -168,6 +168,7 @@ static bool CreateWindowedSincKernel(void)
 static void HQ_MixSamples(void)
 {
 	RealBytesToMix = BytesToMix;
+
 	CurrentFractional += BytesToMixFractional;
 	if (CurrentFractional >= BPM_FRAC_SCALE)
 	{

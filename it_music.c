@@ -462,7 +462,7 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 		sc->MIDIChn = ins->MIDIChn;
 		sc->MIDIProg = ins->MIDIProg;
 		sc->MIDIBank = ins->MIDIBank;
-		sc->LoopDirection = hc->RawNote; // 8bb: during MIDI, LpD = MIDI note
+		sc->LoopDirection = hc->RawNote; // 8bb: during MIDI, sc->LoopDirection = MIDI note
 	}
 
 	sc->ChnVol = hc->ChnVol;
@@ -504,9 +504,14 @@ void InitPlayInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins)
 
 	sc->Flags = SF_CHAN_ON + SF_RECALC_PAN + SF_RECALC_VOL + SF_FREQ_CHANGE + SF_NEW_NOTE;
 
-	if (ins->VolEnv.Flags & ENVF_ENABLED) sc->Flags |= SF_VOLENV_ON;
-	if (ins->PanEnv.Flags & ENVF_ENABLED) sc->Flags |= SF_PANENV_ON;
-	if (ins->PitchEnv.Flags & ENVF_ENABLED) sc->Flags |= SF_PITCHENV_ON;
+	if (ins->VolEnv.Flags & ENVF_ENABLED)
+		sc->Flags |= SF_VOLENV_ON;
+
+	if (ins->PanEnv.Flags & ENVF_ENABLED)
+		sc->Flags |= SF_PANENV_ON;
+
+	if (ins->PitchEnv.Flags & ENVF_ENABLED)
+		sc->Flags |= SF_PITCHENV_ON;
 
 	if (LastSlaveChannel != NULL)
 	{
@@ -647,7 +652,7 @@ static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, inst
 		return NULL;
 	}
 
-	sc->Smp = hc->Smp-1;
+	sc->Smp = hc->Smp - 1;
 	sample_t *s = sc->SmpPtr = &Song.Smp[sc->Smp];
 
 	if (s->Length == 0 || !(s->Flags & SMPF_ASSOCIATED_WITH_HEADER))
@@ -979,7 +984,7 @@ slaveChn_t *AllocateChannel(hostChn_t *hc, uint8_t *hcFlags)
 		sc = NULL; // Offset
 
 		lowestVol = 255;
-		uint8_t targetSmp = hc->Smp-1;
+		uint8_t targetSmp = hc->Smp - 1;
 
 		slaveChn_t *scTmp = AllocateSlaveOffset;
 		for (uint32_t i = 0; i < AllocateNumChannels; i++, scTmp++)
