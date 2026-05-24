@@ -103,6 +103,9 @@ void setHQDriverMixGain(void)
 					if (maskvar[ch] & 8) p += 2;
 				}
 			}
+
+			if (highestChannel >= 31)
+				break;
 		}
 
 		MixGain *= PreAmpTable[highestChannel / 2];
