@@ -23,7 +23,7 @@
 #include "hq_fixsample.h"
 #include "zerovol.h"
 
-// Higher is better. 14 is max for audio output rates of 44100Hz (and higher).
+// Higher is better. 14 is max for audio output rates of >=32kHz.
 #define FREQ_MUL_EXTRA_BITS 14
 
 #define CLAMP(x, low, high) (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
@@ -166,6 +166,8 @@ static bool CreateWindowedSincKernel(void)
 
 static void HQ_MixSamples(void)
 {
+	MixTransferOffset = 0;
+
 	RealBytesToMix = BytesToMix;
 
 	CurrentFractional += BytesToMixFractional;
@@ -185,8 +187,6 @@ static void HQ_MixSamples(void)
 		fLastClickRemovalLeft  -= fLastClickRemovalLeft  * (1.0f / 4096.0f);
 		fLastClickRemovalRight -= fLastClickRemovalRight * (1.0f / 4096.0f);
 	}
-	
-	MixTransferOffset = 0;
 
 	slaveChn_t *sc = sChn;
 	for (uint32_t i = 0; i < Driver.NumChannels; i++, sc++)
