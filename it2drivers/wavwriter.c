@@ -2,14 +2,13 @@
 ** ---- "WAV writer" (IT2.15 registered) driver ----
 */
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "../it_structs.h"
-#include "../it_music.h" // Update()
+#include "../it_music.h" // Update(), ASSERT()
 #include "wavwriter_m.h"
 #include "zerovol.h"
 
@@ -119,7 +118,7 @@ static void WAVWriter_MixSamples(void)
 			const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VolEnvState.CurNode >> 8);
 			if (FilterFreqValue != 127*255 || FilterQ != 0)
 			{
-				assert(FilterFreqValue <= 127*255 && FilterQ <= 127);
+				ASSERT(FilterFreqValue <= 127*255 && FilterQ <= 127);
 				const float r = powf(2.0f, (float)FilterFreqValue * Driver.FreqParameterMultiplier) * Driver.FreqMultiplier;
 				const float p = Driver.QualityFactorTable[FilterQ];
 
@@ -204,7 +203,7 @@ static void WAVWriter_MixSamples(void)
 		{
 			const bool Surround = (sc->FinalPan == PAN_SURROUND);
 			mixFunc Mix = WAVWriter_MixFunctionTables[(Surround << 1) + sc->SmpIs16Bit];
-			assert(Mix != NULL);
+			ASSERT(Mix != NULL);
 
 			// 8bb: prepare volume ramp
 
@@ -411,7 +410,7 @@ static void WAVWriter_MixSamples(void)
 
 static void WAVWriter_SetTempo(uint8_t Tempo)
 {
-	assert(Tempo >= MIN_BPM);
+	ASSERT(Tempo >= MIN_BPM);
 	BytesToMix = ((Driver.MixFrequency << 1) + (Driver.MixFrequency >> 1)) / Tempo;
 
 	/* 8bb:

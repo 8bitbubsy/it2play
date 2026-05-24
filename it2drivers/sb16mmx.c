@@ -2,7 +2,6 @@
 ** ---- SB16 MMX IT2 driver ----
 */
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -10,7 +9,7 @@
 #include <math.h> // nearbyintf()
 #include <fenv.h> // fesetround()
 #include "../it_structs.h"
-#include "../it_music.h" // Update()
+#include "../it_music.h" // Update(), ASSERT()
 #include "sb16mmx_m.h"
 #include "zerovol.h"
 
@@ -137,7 +136,7 @@ static void SB16MMX_MixSamples(void)
 						const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VolEnvState.CurNode >> 8);
 						if (FilterFreqValue != 127*255 || FilterQ != 0)
 						{
-							assert(FilterFreqValue <= 127*255 && FilterQ <= 127);
+							ASSERT(FilterFreqValue <= 127*255 && FilterQ <= 127);
 							const float r = powf(2.0f, (float)FilterFreqValue * Driver.FreqParameterMultiplier) * Driver.FreqMultiplier;
 							const float p = Driver.QualityFactorTable[FilterQ];
 
@@ -248,7 +247,7 @@ static void SB16MMX_MixSamples(void)
 			** MixOffset 4 = Use position update routine (zero volume)
 			*/
 			mixFunc Mix = SB16MMX_MixFunctionTables[(sc->MixOffset << 1) + sc->SmpIs16Bit];
-			assert(Mix != NULL);
+			ASSERT(Mix != NULL);
 
 			// 8bb: pre-mix routine
 			if (sc->MixOffset >= 2) // 8bb: volramp used?
@@ -424,7 +423,7 @@ static void SB16MMX_MixSamples(void)
 
 static void SB16MMX_SetTempo(uint8_t Tempo)
 {
-	assert(Tempo >= MIN_BPM);
+	ASSERT(Tempo >= MIN_BPM);
 	BytesToMix = ((Driver.MixFrequency << 1) + (Driver.MixFrequency >> 1)) / Tempo;
 }
 

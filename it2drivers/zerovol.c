@@ -7,10 +7,9 @@
 ** for SB16/"SB16 MMX"/"WAV writer".
 */
 
-#include <assert.h>
 #include <stdint.h>
 #include "../it_structs.h"
-#include "../it_music.h"
+#include "../it_music.h" // ASSERT()
 
 void UpdateNoLoop(slaveChn_t *sc, uint32_t numSamples)
 {
@@ -61,7 +60,7 @@ void UpdateForwardsLoop(slaveChn_t *sc, uint32_t numSamples)
 
 void UpdatePingPongLoop(slaveChn_t *sc, uint32_t numSamples)
 {
-	assert(numSamples <= UINT16_MAX);
+	ASSERT(numSamples <= UINT16_MAX);
 
 	const uint64_t Delta = (uint64_t)sc->Delta32 * numSamples;
 	const uint32_t IntSamples = (uint32_t)(Delta >> MIX_FRAC_BITS);

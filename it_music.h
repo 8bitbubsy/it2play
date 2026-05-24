@@ -1,8 +1,19 @@
 #pragma once
 
+#ifdef _DEBUG
+#include <assert.h>
+#endif
 #include <stdint.h>
 #include <stdbool.h>
 #include "it_structs.h"
+
+#ifndef ASSERT
+#ifdef _DEBUG
+#define ASSERT(x) assert(x)
+#else
+#define ASSERT(x)
+#endif
+#endif
 
 #ifndef PI
 #define PI 3.14159265358979323846264338327950288

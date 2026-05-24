@@ -2,13 +2,12 @@
 ** ---- SB16 IT2 driver ----
 */
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../it_structs.h"
-#include "../it_music.h" // Update()
+#include "../it_music.h" // Update(), ASSERT()
 #include "sb16_m.h"
 #include "zerovol.h"
 
@@ -231,7 +230,7 @@ static void SB16_MixSamples(void)
 
 static void SB16_SetTempo(uint8_t Tempo)
 {
-	assert(Tempo >= MIN_BPM);
+	ASSERT(Tempo >= MIN_BPM);
 	BytesToMix = ((Driver.MixFrequency << 1) + (Driver.MixFrequency >> 1)) / Tempo;
 }
 

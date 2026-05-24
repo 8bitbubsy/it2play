@@ -4,7 +4,6 @@
 ** NOTE: MIDI logic is incomplete, and it was never meant to be ported anyway
 */
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -627,7 +626,7 @@ static slaveChn_t *AllocateChannelSample(hostChn_t *hc, uint8_t *hcFlags)
 // 8bb: this function is used in AllocateChannel()
 static slaveChn_t *AllocateChannelInstrument(hostChn_t *hc, slaveChn_t *sc, instrument_t *ins, uint8_t *hcFlags)
 {
-	assert(hc != NULL && sc != NULL && ins != NULL);
+	ASSERT(hc != NULL && sc != NULL && ins != NULL);
 
 	hc->SlaveChnPtr = sc;
 	sc->HostChnNum = hc->HostChnNum;
@@ -1069,7 +1068,7 @@ void GetLoopInformation(slaveChn_t *sc)
 	uint8_t LoopMode;
 	int32_t LoopBegin, LoopEnd;
 
-	assert(sc->SmpPtr != NULL);
+	ASSERT(sc->SmpPtr != NULL);
 	sample_t *s = sc->SmpPtr;
 
 	bool LoopEnabled = !!(s->Flags & (SMPF_USE_LOOP | SMPF_USE_SUSTAINLOOP));
@@ -1151,8 +1150,7 @@ void ApplyRandomValues(hostChn_t *hc)
 
 void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 {
-	assert(sc != NULL);
-	assert(hc != NULL);
+	ASSERT(sc != NULL && hc != NULL);
 
 	if (Song.Header.Flags & ITF_LINEAR_FRQ)
 	{
@@ -1267,9 +1265,7 @@ void PitchSlideUp(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 void PitchSlideUpLinear(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 {
-	assert(sc != NULL);
-	assert(hc != NULL);
-	assert(SlideValue >= -1024 && SlideValue <= 1024);
+	ASSERT(sc != NULL && hc != NULL && SlideValue >= -1024 && SlideValue <= 1024);
 
 #ifdef USEFPUCODE // 8bb: IT2.15 (registered)
 
@@ -1347,7 +1343,7 @@ void PitchSlideDown(hostChn_t *hc, slaveChn_t *sc, int16_t SlideValue)
 
 static uint8_t *Music_GetPattern(uint32_t pattern, uint16_t *numRows)
 {
-	assert(pattern < MAX_PATTERNS);
+	ASSERT(pattern < MAX_PATTERNS);
 	pattern_t *p = &Song.Patt[pattern];
 
 	if (p->PackedData == NULL)
@@ -1601,7 +1597,7 @@ static void UpdateData(void)
 
 static void UpdateAutoVibrato(slaveChn_t *sc) // 8bb: renamed from UpdateVibrato() to UpdateAutoVibrato() for clarity
 {
-	assert(sc->SmpPtr != NULL);
+	ASSERT(sc->SmpPtr != NULL);
 	sample_t *smp = sc->SmpPtr;
 
 	if (smp->AutoVibratoDepth == 0)
@@ -1623,7 +1619,7 @@ static void UpdateAutoVibrato(slaveChn_t *sc) // 8bb: renamed from UpdateVibrato
 	{
 		sc->AutoVibratoPos += smp->AutoVibratoSpeed; // Update pointer.
 
-		assert(smp->AutoVibratoWaveform < 3);
+		ASSERT(smp->AutoVibratoWaveform < 3);
 		VibratoData = FineSineData[(smp->AutoVibratoWaveform << 8) + sc->AutoVibratoPos];
 	}
 
@@ -1846,7 +1842,7 @@ static void UpdateInstruments(void)
 			volume = (volume * sc->SmpVol) >> 7;
 			volume = (volume * (uint16_t)((uint32_t)sc->VolEnvState.Value >> 8)) >> 14;
 			volume = (volume * Song.GlobalVolume) >> 7;
-			assert(volume <= 32768);
+			ASSERT(volume <= 32768);
 
 			sc->FinalVol32768 = volume; // 8bb: 0..32768
 			sc->FinalVol128 = volume >> 8; // 8bb: 0..128
@@ -1877,7 +1873,7 @@ static void UpdateInstruments(void)
 				PanVal -= 32;
 
 				sc->FinalPan = (int8_t)(((PanVal * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32); // 8bb: 0..64
-				assert(sc->FinalPan <= 64);
+				ASSERT(sc->FinalPan <= 64);
 			}
 		}
 
@@ -1899,7 +1895,7 @@ static void UpdateSamples(void) // 8bb: for songs without instruments
 			sc->Flags |= SF_UPDATE_MIXERVOL;
 
 			uint16_t volume = (((sc->Vol * sc->ChnVol * sc->SmpVol) >> 4) * Song.GlobalVolume) >> 7;
-			assert(volume <= 32768);
+			ASSERT(volume <= 32768);
 
 			sc->FinalVol32768 = volume; // 8bb: 0..32768
 			sc->FinalVol128 = volume >> 8; // 8bb: 0..128
@@ -1917,7 +1913,7 @@ static void UpdateSamples(void) // 8bb: for songs without instruments
 			else
 			{
 				sc->FinalPan = ((((int8_t)sc->Pan - 32) * (int8_t)(Song.Header.PanSep >> 1)) >> 6) + 32; // 8bb: 0..64
-				assert(sc->FinalPan <= 64);
+				ASSERT(sc->FinalPan <= 64);
 			}
 		}
 
@@ -2205,7 +2201,7 @@ void Music_ReleaseSample(uint32_t sample)
 {
 	lockMixer();
 	
-	assert(sample < MAX_SAMPLES);
+	ASSERT(sample < MAX_SAMPLES);
 	sample_t *smp = &Song.Smp[sample];
 
 	if (smp->OrigData  != NULL) free(smp->OrigData);
@@ -2219,7 +2215,7 @@ void Music_ReleaseSample(uint32_t sample)
 
 bool Music_AllocatePattern(uint32_t pattern, uint32_t length)
 {
-	assert(pattern < MAX_PATTERNS);
+	ASSERT(pattern < MAX_PATTERNS);
 	pattern_t *p = &Song.Patt[pattern];
 
 	if (p->PackedData != NULL)
@@ -2234,7 +2230,7 @@ bool Music_AllocatePattern(uint32_t pattern, uint32_t length)
 
 bool Music_AllocateSample(uint32_t sample, uint32_t length)
 {
-	assert(sample < MAX_SAMPLES);
+	ASSERT(sample < MAX_SAMPLES);
 	sample_t *s = &Song.Smp[sample];
 
 	// 8bb: done a little differently than IT2
@@ -2257,7 +2253,7 @@ bool Music_AllocateSample(uint32_t sample, uint32_t length)
 
 bool Music_AllocateRightSample(uint32_t sample, uint32_t length) // 8bb: added this
 {
-	assert(sample < MAX_SAMPLES);
+	ASSERT(sample < MAX_SAMPLES);
 	sample_t *s = &Song.Smp[sample];
 
 	s->OrigDataR = (int8_t *)malloc(length + SAMPLE_PAD_LENGTH); // 8bb: extra bytes for interpolation taps, filled later
@@ -2277,7 +2273,7 @@ void Music_ReleasePattern(uint32_t pattern)
 {
 	lockMixer();
 	
-	assert(pattern < MAX_PATTERNS);
+	ASSERT(pattern < MAX_PATTERNS);
 	pattern_t *p = &Song.Patt[pattern];
 
 	if (p->PackedData != NULL)
@@ -2404,7 +2400,7 @@ bool Music_RenderToWAV(const char *filenameOut)
 		DriverMixSamples();
 
 		const int32_t BytesToMix = DriverPostMix(AudioBuffer, 0);
-		assert(BytesToMix <= MaxSamplesToMix);
+		ASSERT(BytesToMix <= MaxSamplesToMix);
 
 		fwrite(AudioBuffer, 2, BytesToMix * 2, f);
 		TotalSamples += BytesToMix * 2;

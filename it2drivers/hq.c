@@ -12,14 +12,13 @@
 ** - Supports ModPlug Tracker extended filter range
 */
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "../it_structs.h"
-#include "../it_music.h" // Update(), PI
+#include "../it_music.h" // Update(), PI, ASSERT()
 #include "hq_m.h"
 #include "hq_fixsample.h"
 #include "zerovol.h"
@@ -196,7 +195,7 @@ static void HQ_MixSamples(void)
 			continue;
 
 		sample_t *s = sc->SmpPtr;
-		assert(s != NULL);
+		ASSERT(s != NULL);
 
 		if (sc->Flags & SF_NOTE_STOP) // note cut
 		{
@@ -254,7 +253,7 @@ static void HQ_MixSamples(void)
 			const uint16_t FilterFreqValue = (sc->MIDIBank & 0x00FF) * (uint8_t)((uint16_t)sc->VolEnvState.CurNode >> 8);
 			if (FilterFreqValue != 127*255 || FilterQ != 0)
 			{
-				assert(FilterFreqValue <= 127*255 && FilterQ <= 127);
+				ASSERT(FilterFreqValue <= 127*255 && FilterQ <= 127);
 				const float r = exp2f((float)FilterFreqValue * Driver.FreqParameterMultiplier) * Driver.FreqMultiplier;
 				const float p = Driver.QualityFactorTable[FilterQ];
 				const float d = (p * r) + (p - 1.0f);
@@ -318,7 +317,7 @@ static void HQ_MixSamples(void)
 			const bool Stereo = !!(s->Flags & SMPF_STEREO);
 			
 			MixFunc_t Mix = HQ_MixFunctionTables[(FilterActive << 3) + (Stereo << 2) + (Surround << 1) + sc->SmpIs16Bit];
-			assert(Mix != NULL);
+			ASSERT(Mix != NULL);
 
 			const uint32_t LoopLength = sc->LoopEnd - sc->LoopBegin; // also actual length for non-loopers
 			if ((int32_t)LoopLength > 0)
