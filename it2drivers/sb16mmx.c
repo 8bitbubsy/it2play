@@ -415,6 +415,7 @@ static void SB16MMX_MixSamples(void)
 			}
 		}
 
+		// 8bb: clear some flags
 		sc->Flags &= ~(SF_RECALC_PAN      | SF_RECALC_VOL | SF_FREQ_CHANGE |
 		               SF_UPDATE_MIXERVOL | SF_NEW_NOTE   | SF_NOTE_STOP   |
 		               SF_LOOP_CHANGED    | SF_PAN_CHANGED);

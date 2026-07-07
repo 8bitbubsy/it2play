@@ -561,6 +561,7 @@ void InitCommandF(hostChn_t *hc)
 
 static bool Gxx_ChangeSample(hostChn_t *hc, slaveChn_t *sc, uint8_t sample)
 {
+	// 8bb: clear some flags first
 	sc->Flags &= ~(SF_NOTE_STOP | SF_LOOP_CHANGED | SF_CHN_MUTED | SF_VOLENV_ON |
 	               SF_PANENV_ON | SF_PITCHENV_ON  | SF_PAN_CHANGED);
 
@@ -1632,16 +1633,18 @@ void CommandJ(hostChn_t *hc)
 
 	sc->Flags |= SF_FREQ_CHANGE;
 
-	// 8bb: used as an index to a 16-bit LUT (hence increments of 2)
+	/* 8bb: 'Tick' was originally used as an index to a 16-bit LUT (hence increments of 2).
+	** Use the same increment logic just in case it matters for some weird bug or edge-case.
+	*/
 	tick += 2;
 	if (tick >= 6)
 	{
 		*(uint16_t *)&hc->MiscEfxData[0] = 0;
 		return;
 	}
-
 	*(uint16_t *)&hc->MiscEfxData[0] = tick;
 
+	// 8bb: arp note for current tick
 	const uint16_t arpNote = *(uint16_t *)&hc->MiscEfxData[tick];
 
 	uint64_t freq = (uint64_t)sc->Frequency * (uint32_t)PitchTable[arpNote];

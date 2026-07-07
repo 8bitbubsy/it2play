@@ -1457,7 +1457,7 @@ static void UpdateNoteData(void)
 	if (Song.CurrentPattern != Song.DecodeExpectedPattern || ++Song.DecodeExpectedRow != Song.CurrentRow)
 		UpdateGOTONote();
 
-	// First clear all old command&value.
+	// First clear all old command&value. (8bb: clear some flags)
 	hc = hChn;
 	for (int32_t i = 0; i < MAX_HOST_CHANNELS; i++, hc++)
 		hc->Flags &= ~(HF_UPDATE_EFX_IF_CHAN_ON | HF_ALWAYS_UPDATE_EFX | HF_ROW_UPDATED | HF_UPDATE_VOLEFX_IF_CHAN_ON);
