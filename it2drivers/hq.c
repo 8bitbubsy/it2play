@@ -123,7 +123,7 @@ static inline double besselI0(double z)
 		s += ds;
 		d += 2.0f;
 	}
-	while (ds > s*(1E-12));
+	while (ds > s*(1E-11));
 
 	return s;
 }
@@ -147,7 +147,7 @@ static bool CreateWindowedSincKernel(void)
 	if (Driver.fSincLUT == NULL)
 		return false;
 
-	const double kaiserBeta = 9.6377;
+	const double kaiserBeta = 10.1326; // stopband attenuation of ~100.6dB
 
 	const double besselI0BetaMul = 1.0 / besselI0(kaiserBeta);
 	for (int32_t i = 0; i < SINC_PHASES * SINC_WIDTH; i++)
