@@ -2027,7 +2027,7 @@ void Music_CalculateFilterTables(uint32_t mixingFrequency) // 8bb: added this
 			Driver.QualityFactorTable[i] = (float)pow(10.0, (-i * filterStep) / (128.0 * 20.0));
 
 		Driver.FreqParameterMultiplier = (float)(-1.0 / (filterStep * 256.0));
-		Driver.FreqMultiplier = (float)((1.0 / (2.0 * PI * 110.0 * exp2(0.25))) * mixingFrequency);
+		Driver.FreqMultiplier = (float)((1.0 / (2.0 * MY_PI * 110.0 * exp2(0.25))) * mixingFrequency);
 	}
 }
 
