@@ -121,7 +121,7 @@ static inline double besselI0(double z)
 	{
 		ds *= zz / (d * d);
 		s += ds;
-		d += 2.0f;
+		d += 2.0;
 	}
 	while (ds > s*(1E-11));
 
@@ -136,29 +136,48 @@ static inline double sinc(double x)
 	}
 	else
 	{
-		x *= PI;
+		x *= MY_PI;
 		return sin(x) / x;
 	}
 }
 
 static bool CreateWindowedSincKernel(void)
 {
+	double dTapBuffer[SINC_WIDTH];
+
 	Driver.fSincLUT = (float *)malloc(SINC_PHASES * SINC_WIDTH * sizeof (float));
 	if (Driver.fSincLUT == NULL)
 		return false;
 
 	const double kaiserBeta = 10.1326; // stopband attenuation of ~100.6dB
-
 	const double besselI0BetaMul = 1.0 / besselI0(kaiserBeta);
-	for (int32_t i = 0; i < SINC_PHASES * SINC_WIDTH; i++)
+
+#define KAISER_XMUL (1.0 / (SINC_WIDTH / 2))
+#define CENTER_TAP ((SINC_WIDTH / 2) - 1)
+
+	float *fLUTPtr = Driver.fSincLUT;
+	for (int32_t phase = 0; phase < SINC_PHASES; phase++)
 	{
-		const double x = ((i & (SINC_WIDTH-1)) - ((SINC_WIDTH / 2) - 1)) - ((i >> SINC_WIDTH_BITS) * (1.0 / SINC_PHASES));
+		const double dPhase = phase * (1.0 / SINC_PHASES);
 
-		// Kaiser-Bessel window
-		const double n = x * (1.0 / (SINC_WIDTH / 2));
-		const double window = besselI0(kaiserBeta * sqrt(1.0 - n * n)) * besselI0BetaMul;
+		double dTapSum = 0.0;
+		for (int32_t tap = 0; tap < SINC_WIDTH; tap++)
+		{
+			const double x = (tap - CENTER_TAP) - dPhase;
 
-		Driver.fSincLUT[i] = (float)(sinc(x) * window);
+			// Kaiser-Bessel window
+			const double n = x * KAISER_XMUL;
+			const double dWindow = besselI0(kaiserBeta * sqrt(1.0 - n * n)) * besselI0BetaMul;
+
+			const double dWSinc = sinc(x) * dWindow;
+			dTapBuffer[tap] = dWSinc;
+			dTapSum += dWSinc;
+		}
+
+		// normalize for unity gain before storing taps
+		const double dTapScale = 1.0 / dTapSum;
+		for (int32_t tap = 0; tap < SINC_WIDTH; tap++)
+			*fLUTPtr++ = (float)(dTapBuffer[tap] * dTapScale);
 	}
 
 	return true;
